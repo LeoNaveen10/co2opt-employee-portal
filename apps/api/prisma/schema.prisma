@@ -1,0 +1,125 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String           @id @default(cuid())
+  email          String           @unique
+  name           String
+  role           String           @default("EMPLOYEE")
+  passwordHash   String?
+  inviteHash     String?
+  active         Boolean          @default(true)
+  birthday       String?
+  joinedOn       String?
+  showBirthday   Boolean          @default(true)
+  createdAt      DateTime         @default(now())
+  requestedLeaves LeaveRequest[]  @relation("Requester")
+  reviewedLeaves  LeaveRequest[]  @relation("Reviewer")
+  recommendations Recommendation[]
+  likes          Like[]
+  ratings        Rating[]
+  kudosSent      Kudos[]          @relation("Sender")
+  kudosReceived  Kudos[]          @relation("Recipient")
+  votes          PollVote[]
+  wheelPresets   WheelPreset[]
+  pollsCreated   Poll[]           @relation("PollCreator")
+}
+
+model PublicHoliday {
+  id    Int    @id @default(autoincrement())
+  date  String @unique
+  name  String
+}
+
+model LeaveRequest {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   User     @relation("Requester", fields: [employeeId], references: [id])
+  reviewerId String?
+  reviewer   User?    @relation("Reviewer", fields: [reviewerId], references: [id])
+  startDate  String
+  endDate    String
+  days       Int
+  status     String   @default("PENDING")
+  note       String?
+  createdAt  DateTime @default(now())
+  reviewedAt DateTime?
+}
+
+model Recommendation {
+  id        String   @id @default(cuid())
+  type      String
+  title     String
+  url       String?
+  note      String?
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id])
+  createdAt DateTime @default(now())
+  likes     Like[]
+  ratings   Rating[]
+}
+
+model Like {
+  userId           String
+  recommendationId String
+  user             User           @relation(fields: [userId], references: [id])
+  recommendation   Recommendation @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+
+  @@id([userId, recommendationId])
+}
+
+model Rating {
+  userId           String
+  recommendationId String
+  score            Int
+  user             User           @relation(fields: [userId], references: [id])
+  recommendation   Recommendation @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+
+  @@id([userId, recommendationId])
+}
+
+model Kudos {
+  id        String   @id @default(cuid())
+  fromId    String
+  toId      String
+  message   String
+  from      User     @relation("Sender", fields: [fromId], references: [id])
+  to        User     @relation("Recipient", fields: [toId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model Poll {
+  id         String     @id @default(cuid())
+  question   String
+  optionsJson String
+  closesAt   DateTime
+  createdBy  String
+  creator    User       @relation("PollCreator", fields: [createdBy], references: [id])
+  createdAt  DateTime   @default(now())
+  votes      PollVote[]
+}
+
+model PollVote {
+  pollId      String
+  userId      String
+  optionIndex Int
+  poll        Poll @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  user        User @relation(fields: [userId], references: [id])
+
+  @@id([pollId, userId])
+}
+
+model WheelPreset {
+  id          String   @id @default(cuid())
+  name        String
+  optionsJson String
+  createdBy   String
+  creator     User     @relation(fields: [createdBy], references: [id])
+  createdAt   DateTime @default(now())
+}
