@@ -36,9 +36,6 @@ async function main() {
     });
   }
 
-  // Configure company-specific public holidays through the admin UI.
-  // Do not assume a particular country's calendar.
-
   console.log('Seed complete');
 }
 

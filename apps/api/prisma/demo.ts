@@ -8,7 +8,6 @@ if (process.env.NODE_ENV === 'production' || process.env.ALLOW_DEMO_SEED !== 'ye
 }
 
 const prisma = new PrismaClient();
-const year = new Date().getUTCFullYear();
 const passwordHash = await argon2.hash('DemoOnly!2026');
 const people = [
   { email:'demo.admin@co2opt.com', name:'Alex Aurora', role:'ADMIN' },
@@ -36,11 +35,5 @@ if (await prisma.kudos.count() === 0) await prisma.kudos.createMany({data:[
   {fromId:users[0].id,toId:users[1].id,message:'You saved the day during the release 🚀'},
   {fromId:users[2].id,toId:users[3].id,message:'Thanks for making team calls hilarious 💚'}
 ]});
-if (await prisma.poll.count() === 0) await prisma.poll.create({data:{
-  question:'What should our next Friday activity be?',optionsJson:JSON.stringify(['Movie night','Online games','Team quiz','Music roulette']),closesAt:new Date(year+1,0,1),createdBy:users[0].id
-}});
-if (await prisma.wheelPreset.count() === 0) await prisma.wheelPreset.create({data:{
-  name:'Friday Fun',optionsJson:JSON.stringify(['Movie','Games','Trivia','Memes','Music']),createdBy:users[1].id
-}});
 console.log('Demo accounts (local only): demo.admin@co2opt.com / DemoOnly!2026 (same password for all demo users)');
 await prisma.$disconnect();

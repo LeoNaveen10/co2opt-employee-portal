@@ -1,17 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from './api';
-import type { Holiday, Kudos, LeaveRequest, LeaveSummary, Poll, Recommendation, User, WheelPreset } from './types';
+import type { Kudos, LeaveRequest, LeaveSummary, Recommendation, RecommendationSearchResult, User } from './types';
 
 type DashboardData = {
   users: User[];
   leaveSummary: LeaveSummary[];
   leaveRequests: LeaveRequest[];
-  approvedCalendar: LeaveRequest[];
-  holidays: Holiday[];
+  calendarLeaves: LeaveRequest[];
   recommendations: Recommendation[];
   kudos: Kudos[];
-  polls: Poll[];
-  wheelPresets: WheelPreset[];
   celebrations: { birthdays: User[]; anniversaries: User[] };
 };
 
@@ -21,12 +18,9 @@ const initialData: DashboardData = {
   users: [],
   leaveSummary: [],
   leaveRequests: [],
-  approvedCalendar: [],
-  holidays: [],
+  calendarLeaves: [],
   recommendations: [],
   kudos: [],
-  polls: [],
-  wheelPresets: [],
   celebrations: { birthdays: [], anniversaries: [] }
 };
 
@@ -37,6 +31,7 @@ function App() {
   const [message, setMessage] = useState<string>('');
   const [activeTab, setActiveTab] = useState<TabKey>('home');
   const [data, setData] = useState<DashboardData>(initialData);
+  const [editingRecommendation, setEditingRecommendation] = useState<Recommendation | null>(null);
 
   async function bootstrap() {
     setLoading(true);
@@ -54,28 +49,22 @@ function App() {
   }
 
   async function loadDashboard() {
-    const [users, leaveSummary, leaveRequests, calendar, recommendations, kudos, polls, wheelPresets, celebrations, holidays] = await Promise.all([
+    const [users, leaveSummary, leaveRequests, calendar, recommendations, kudos, celebrations] = await Promise.all([
       api<{ users: User[] }>('/users'),
       api<{ summary: LeaveSummary[] }>('/leave/summary'),
       api<{ requests: LeaveRequest[] }>('/leave/requests'),
-      api<{ approved: LeaveRequest[] }>('/calendar'),
+      api<{ leaves: LeaveRequest[] }>('/calendar'),
       api<{ items: Recommendation[] }>('/recommendations'),
       api<{ items: Kudos[] }>('/kudos'),
-      api<{ polls: Poll[] }>('/polls'),
-      api<{ presets: WheelPreset[] }>('/wheel-presets'),
-      api<{ birthdays: User[]; anniversaries: User[] }>('/celebrations'),
-      api<{ holidays: Holiday[] }>('/public-holidays')
+      api<{ birthdays: User[]; anniversaries: User[] }>('/celebrations')
     ]);
     setData({
       users: users.users,
       leaveSummary: leaveSummary.summary,
       leaveRequests: leaveRequests.requests,
-      approvedCalendar: calendar.approved,
-      holidays: holidays.holidays,
+      calendarLeaves: calendar.leaves,
       recommendations: recommendations.items,
       kudos: kudos.items,
-      polls: polls.polls,
-      wheelPresets: wheelPresets.presets,
       celebrations
     });
   }
@@ -112,18 +101,30 @@ function App() {
       await work();
       await loadDashboard();
       setMessage(successMessage);
+      return true;
     } catch (error) {
       setMessage((error as Error).message);
+      return false;
     } finally {
       setBusy(false);
     }
   }
 
+  async function deleteRecommendation(id: string) {
+    if (!window.confirm('Delete this recommendation?')) return;
+    const deleted = await runAction(
+      () => api(`/recommendations/${id}`, { method: 'DELETE' }),
+      'Recommendation deleted.'
+    );
+    if (deleted && editingRecommendation?.id === id) setEditingRecommendation(null);
+  }
+
   if (loading) return <div className="splash">Loading the fun zone...</div>;
   if (!user) return <AuthScreen onSubmit={handleAuth} busy={busy} message={message} />;
 
-  const pendingApprovals = data.leaveRequests.filter((leave) => leave.status === 'PENDING').length;
   const myLeave = data.leaveSummary.find((item) => item.userId === user.id);
+  const leaveTaken = myLeave?.taken ?? getTakenDays(user.id, data.leaveRequests);
+  const leaveRemaining = Math.max((myLeave?.allocation ?? 23) - leaveTaken, 0);
   const upcomingBirthdays = data.celebrations.birthdays.slice(0, 3);
 
   return (
@@ -173,14 +174,14 @@ function App() {
               <p>This is your colorful little team playground.</p>
             </div>
             <div className="hero-stats">
-              <StatBubble label="Leave left" value={String(myLeave?.remaining ?? 23)} />
-              <StatBubble label="Pending approvals" value={String(pendingApprovals)} />
+              <StatBubble label="Leave taken" value={String(leaveTaken)} />
+              <StatBubble label="Leave remaining" value={String(leaveRemaining)} />
               <StatBubble label="Recommendations" value={String(data.recommendations.length)} />
             </div>
           </section>
           <section className="card">
             <h3>Leave leaderboard</h3>
-            <LeaveSummaryTable summary={data.leaveSummary} />
+            <LeaveSummaryTable summary={data.leaveSummary} requests={data.leaveRequests} />
           </section>
           <section className="card gradient-b">
             <h3>Shout-outs lately 💚</h3>
@@ -203,11 +204,6 @@ function App() {
               <div key={`${person.id}-anniv`} className="mini-card"><strong>{person.name}</strong> — Joined: {person.joinedOn}</div>
             ))}
           </section>
-          <section className="card gradient-d">
-            <h3>This week's polls 🗳️</h3>
-            {data.polls.slice(0, 2).map((poll) => <PollPreview key={poll.id} poll={poll} />)}
-            {data.polls.length === 0 && <p>No polls yet. Ask something random.</p>}
-          </section>
         </div>
       )}
 
@@ -215,30 +211,21 @@ function App() {
         <div className="page-grid two-col">
           <section className="card">
             <h3>Everyone's leave counts</h3>
-            <LeaveSummaryTable summary={data.leaveSummary} />
+            <LeaveSummaryTable summary={data.leaveSummary} requests={data.leaveRequests} />
           </section>
           <section className="card">
-            <h3>Request leave</h3>
-            <LeaveRequestForm onSubmit={(payload) => runAction(() => api('/leave/requests', { method: 'POST', body: JSON.stringify(payload) }), 'Leave request submitted.')} busy={busy} />
+            <h3>Record leave</h3>
+            <p className="section-subtitle">Leave is recorded immediately and deducted from your balance. No approval is needed.</p>
+            <LeaveRequestForm onSubmit={(payload) => runAction(() => api('/leave/requests', { method: 'POST', body: JSON.stringify(payload) }), 'Leave recorded and balance updated.')} busy={busy} />
           </section>
           <section className="card span-2">
-            <h3>Approval queue & leave history</h3>
-            <LeaveRequestsList
-              requests={data.leaveRequests}
-              currentUser={user}
-              onDecision={(id, decision) => runAction(() => api(`/leave/requests/${id}/decision`, { method: 'POST', body: JSON.stringify({ decision }) }), `Request ${decision.toLowerCase()}.`)}
-            />
+            <h3>Leave records</h3>
+            <p className="section-subtitle">Leave records are permanent and cannot be edited or deleted after they are added.</p>
+            <LeaveRequestsList requests={data.leaveRequests} />
           </section>
           <section className="card span-2">
             <h3>Team availability calendar</h3>
-            <AvailabilityCalendar approvedLeaves={data.approvedCalendar} holidays={data.holidays} />
-          </section>
-          <section className="card span-2">
-            <h3>Company public holidays</h3>
-            <HolidayList holidays={data.holidays} />
-            {user.role === 'ADMIN' ? (
-              <HolidayForm onSubmit={(payload) => runAction(() => api('/public-holidays', { method: 'POST', body: JSON.stringify(payload) }), 'Holiday saved.')} />
-            ) : null}
+            <AvailabilityCalendar leaves={data.calendarLeaves} />
           </section>
         </div>
       )}
@@ -246,9 +233,26 @@ function App() {
       {activeTab === 'discover' && (
         <div className="page-grid two-col">
           <section className="card">
-            <h3>Add recommendation</h3>
+            <h3>{editingRecommendation ? 'Edit recommendation' : 'Add recommendation'}</h3>
             <p className="section-subtitle">Share a movie, series, book, or song with the team.</p>
-            <RecommendationForm onSubmit={(payload) => runAction(() => api('/recommendations', { method: 'POST', body: JSON.stringify(payload) }), 'Recommendation added!')} />
+            <RecommendationForm
+              key={editingRecommendation?.id ?? 'new-recommendation'}
+              recommendation={editingRecommendation}
+              busy={busy}
+              onCancel={() => setEditingRecommendation(null)}
+              onSubmit={async (payload) => {
+                const recommendationId = editingRecommendation?.id;
+                const saved = await runAction(
+                  () => api(recommendationId ? `/recommendations/${recommendationId}` : '/recommendations', {
+                    method: recommendationId ? 'PATCH' : 'POST',
+                    body: JSON.stringify(payload)
+                  }),
+                  recommendationId ? 'Recommendation updated.' : 'Recommendation added!'
+                );
+                if (saved) setEditingRecommendation(null);
+                return saved;
+              }}
+            />
           </section>
           <section className="card span-2">
             <h3>Movies, series and books 🍿📚</h3>
@@ -256,6 +260,9 @@ function App() {
             <RecommendationGrid
               items={data.recommendations.filter((item) => item.type !== 'MUSIC')}
               currentUser={user}
+              busy={busy}
+              onEdit={setEditingRecommendation}
+              onDelete={(id) => void deleteRecommendation(id)}
               onLike={(id) => runAction(() => api(`/recommendations/${id}/like`, { method: 'POST' }), 'Reaction updated.')}
               onRate={(id, score) => runAction(() => api(`/recommendations/${id}/rate`, { method: 'POST', body: JSON.stringify({ score }) }), 'Rating saved.')}
             />
@@ -266,27 +273,12 @@ function App() {
             <RecommendationGrid
               items={data.recommendations.filter((item) => item.type === 'MUSIC')}
               currentUser={user}
+              busy={busy}
+              onEdit={setEditingRecommendation}
+              onDelete={(id) => void deleteRecommendation(id)}
               onLike={(id) => runAction(() => api(`/recommendations/${id}/like`, { method: 'POST' }), 'Reaction updated.')}
               onRate={(id, score) => runAction(() => api(`/recommendations/${id}/rate`, { method: 'POST', body: JSON.stringify({ score }) }), 'Rating saved.')}
             />
-          </section>
-          <section className="card">
-            <h3>Create a poll</h3>
-            <p className="section-subtitle">Anyone on the team can create a poll.</p>
-            <PollForm onSubmit={(payload) => runAction(() => api('/polls', { method: 'POST', body: JSON.stringify(payload) }), 'Poll created.')} />
-          </section>
-          <section className="card span-2">
-            <h3>Weekly polls</h3>
-            <p className="section-subtitle">Vote once and watch the results update live.</p>
-            <PollList polls={data.polls} currentUser={user} onVote={(id, optionIndex) => runAction(() => api(`/polls/${id}/vote`, { method: 'POST', body: JSON.stringify({ optionIndex }) }), 'Vote submitted.')} />
-          </section>
-          <section className="card">
-            <h3>Save a decision wheel</h3>
-            <WheelForm onSubmit={(payload) => runAction(() => api('/wheel-presets', { method: 'POST', body: JSON.stringify(payload) }), 'Wheel preset saved.')} />
-          </section>
-          <section className="card span-2 gradient-d">
-            <h3>Decision wheel 🎡</h3>
-            <DecisionWheel presets={data.wheelPresets} />
           </section>
         </div>
       )}
@@ -332,10 +324,11 @@ function App() {
           <section className="card gradient-b">
             <h3>Your portal vibe</h3>
             <ul className="feature-list">
-              <li>You can see everyone's leave balance because this is a fun zone.</li>
-              <li>Leave counts skip weekends and configured company public holidays.</li>
+              <li>Leave is recorded immediately without an approval step.</li>
+              <li>You can see everyone's leave allocation, taken days and remaining balance.</li>
+              <li>Leave counts skip weekends.</li>
               <li>Half-day support is intentionally disabled.</li>
-              <li>Music, polls, kudos and the decision wheel keep the place alive.</li>
+              <li>Music and kudos keep the place alive.</li>
             </ul>
           </section>
         </div>
@@ -391,24 +384,32 @@ function StatBubble({ label, value }: { label: string; value: string }) {
   return <div className="stat-bubble"><strong>{value}</strong><span>{label}</span></div>;
 }
 
-function LeaveSummaryTable({ summary }: { summary: LeaveSummary[] }) {
+function getTakenDays(userId: string, requests: LeaveRequest[]) {
+  const year = new Date().getUTCFullYear().toString();
+  return requests
+    .filter((leave) => leave.employeeId === userId && leave.status !== 'REJECTED' && leave.startDate.startsWith(`${year}-`))
+    .reduce((sum, leave) => sum + leave.days, 0);
+}
+
+function LeaveSummaryTable({ summary, requests }: { summary: LeaveSummary[]; requests: LeaveRequest[] }) {
   return (
     <div className="table-wrap">
       <table>
         <thead>
-          <tr><th>Name</th><th>Role</th><th>Allocation</th><th>Approved</th><th>Pending</th><th>Remaining</th></tr>
+          <tr><th>Name</th><th>Allocation</th><th>Taken</th><th>Remaining</th></tr>
         </thead>
         <tbody>
-          {summary.map((row) => (
-            <tr key={row.userId}>
-              <td>{row.name}</td>
-              <td>{row.role}</td>
-              <td>{row.allocation}</td>
-              <td>{row.approved}</td>
-              <td>{row.pending}</td>
-              <td><strong>{row.remaining}</strong></td>
-            </tr>
-          ))}
+          {summary.map((row) => {
+            const taken = row.taken ?? getTakenDays(row.userId, requests);
+            return (
+              <tr key={row.userId}>
+                <td>{row.name}</td>
+                <td>{row.allocation}</td>
+                <td>{taken}</td>
+                <td><strong>{Math.max(row.allocation - taken, 0)}</strong></td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -424,33 +425,26 @@ function LeaveRequestForm({ onSubmit, busy }: { onSubmit: (payload: { startDate:
       <label>Start date<input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required /></label>
       <label>End date<input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required /></label>
       <textarea placeholder="Optional note" value={note} onChange={(e) => setNote(e.target.value)} />
-      <button className="primary-btn" disabled={busy}>Submit leave request</button>
+      <button className="primary-btn" disabled={busy}>Record leave immediately</button>
     </form>
   );
 }
 
-function LeaveRequestsList({ requests, currentUser, onDecision }: { requests: LeaveRequest[]; currentUser: User; onDecision: (id: string, decision: 'APPROVED' | 'REJECTED') => void }) {
+function LeaveRequestsList({ requests }: { requests: LeaveRequest[] }) {
   return (
     <div className="grid-cards">
       {requests.map((item) => (
         <article key={item.id} className="mini-card">
           <h4>{item.employee.name} • {item.days} day(s)</h4>
           <p>{item.startDate} → {item.endDate}</p>
-          <p>Status: <strong>{item.status}</strong></p>
           {item.note ? <p>Note: {item.note}</p> : null}
-          {['MANAGER', 'ADMIN'].includes(currentUser.role) && item.status === 'PENDING' && currentUser.id !== item.employeeId ? (
-            <div className="inline-actions">
-              <button className="primary-btn small" onClick={() => onDecision(item.id, 'APPROVED')}>Approve</button>
-              <button className="ghost-btn small" onClick={() => onDecision(item.id, 'REJECTED')}>Reject</button>
-            </div>
-          ) : null}
         </article>
       ))}
     </div>
   );
 }
 
-function AvailabilityCalendar({ approvedLeaves, holidays }: { approvedLeaves: LeaveRequest[]; holidays: Holiday[] }) {
+function AvailabilityCalendar({ leaves }: { leaves: LeaveRequest[] }) {
   const month = new Date();
   const year = month.getFullYear();
   const monthIndex = month.getMonth();
@@ -458,28 +452,31 @@ function AvailabilityCalendar({ approvedLeaves, holidays }: { approvedLeaves: Le
   const lastDay = new Date(year, monthIndex + 1, 0);
   const days: Date[] = [];
   for (let day = 1; day <= lastDay.getDate(); day += 1) days.push(new Date(year, monthIndex, day));
-  const holidayMap = new Map(holidays.map((item) => [item.date, item.name]));
-
-  function awayNames(date: Date) {
-    const iso = date.toISOString().slice(0, 10);
-    return approvedLeaves.filter((leave) => iso >= leave.startDate && iso <= leave.endDate).map((leave) => leave.employee.name);
+  function localISODate(date: Date) {
+    const monthPart = String(date.getMonth() + 1).padStart(2, '0');
+    const dayPart = String(date.getDate()).padStart(2, '0');
+    return `${date.getFullYear()}-${monthPart}-${dayPart}`;
   }
 
   return (
     <div>
+      <p className="section-subtitle">{month.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</p>
+      <div className="calendar-legend">
+        <span className="tag away">Leave taken / booked</span>
+      </div>
       <div className="calendar-grid">
         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => <div key={day} className="calendar-head">{day}</div>)}
         {Array.from({ length: firstDay.getDay() }).map((_, idx) => <div key={`pad-${idx}`} className="calendar-cell muted" />)}
         {days.map((date) => {
-          const iso = date.toISOString().slice(0, 10);
-          const names = awayNames(date);
-          const holidayName = holidayMap.get(iso);
+          const iso = localISODate(date);
+          const dayLeaves = leaves.filter((leave) => iso >= leave.startDate && iso <= leave.endDate);
           return (
-            <div key={iso} className={`calendar-cell ${holidayName ? 'holiday-cell' : ''}`}>
+            <div key={iso} className="calendar-cell">
               <div className="calendar-date">{date.getDate()}</div>
-              {holidayName ? <span className="tag holiday">{holidayName}</span> : null}
-              {names.slice(0, 3).map((name) => <span key={name} className="tag away">{name}</span>)}
-              {names.length > 3 ? <span className="tag away">+{names.length - 3} more</span> : null}
+              {dayLeaves.slice(0, 3).map((leave) => (
+                <span key={leave.id} className="tag away">{leave.employee.name}</span>
+              ))}
+              {dayLeaves.length > 3 ? <span className="tag">+{dayLeaves.length - 3} more</span> : null}
             </div>
           );
         })}
@@ -488,44 +485,121 @@ function AvailabilityCalendar({ approvedLeaves, holidays }: { approvedLeaves: Le
   );
 }
 
-function HolidayList({ holidays }: { holidays: Holiday[] }) {
-  return <div className="chip-row">{holidays.map((holiday) => <span key={holiday.date} className="chip">{holiday.date} • {holiday.name}</span>)}</div>;
-}
+function RecommendationForm({ recommendation, busy, onSubmit, onCancel }: {
+  recommendation: Recommendation | null;
+  busy: boolean;
+  onSubmit: (payload: { type: string; title: string; url: string; imageUrl: string; note: string }) => Promise<boolean>;
+  onCancel: () => void;
+}) {
+  const [type, setType] = useState(recommendation?.type ?? 'MOVIE');
+  const [title, setTitle] = useState(recommendation?.title ?? '');
+  const [url, setUrl] = useState(recommendation?.url ?? '');
+  const [imageUrl, setImageUrl] = useState(recommendation?.imageUrl ?? '');
+  const [note, setNote] = useState(recommendation?.note ?? '');
+  const [searchResults, setSearchResults] = useState<RecommendationSearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+  const [searchError, setSearchError] = useState('');
 
-function HolidayForm({ onSubmit }: { onSubmit: (payload: { date: string; name: string }) => void }) {
-  const [date, setDate] = useState('');
-  const [name, setName] = useState('');
-  return (
-    <form className="inline-form" onSubmit={(e) => { e.preventDefault(); onSubmit({ date, name }); setDate(''); setName(''); }}>
-      <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
-      <input placeholder="Holiday name" value={name} onChange={(e) => setName(e.target.value)} required />
-      <button className="primary-btn small">Save</button>
-    </form>
-  );
-}
+  async function searchCatalog() {
+    if (title.trim().length < 2) {
+      setSearchError('Enter at least 2 characters to search.');
+      return;
+    }
+    setSearching(true);
+    setSearchError('');
+    setHasSearched(false);
+    try {
+      const response = await api<{ results: RecommendationSearchResult[] }>(
+        `/recommendations/search?type=${encodeURIComponent(type)}&term=${encodeURIComponent(title.trim())}`
+      );
+      setSearchResults(response.results);
+      setHasSearched(true);
+    } catch (error) {
+      setSearchError((error as Error).message);
+    } finally {
+      setSearching(false);
+    }
+  }
 
-function RecommendationForm({ onSubmit }: { onSubmit: (payload: { type: string; title: string; url: string; note: string }) => void }) {
-  const [type, setType] = useState('MOVIE');
-  const [title, setTitle] = useState('');
-  const [url, setUrl] = useState('');
-  const [note, setNote] = useState('');
   return (
-    <form className="form-stack" onSubmit={(e) => { e.preventDefault(); onSubmit({ type, title, url, note }); setTitle(''); setUrl(''); setNote(''); }}>
-      <select value={type} onChange={(e) => setType(e.target.value)}>
+    <form className="form-stack" onSubmit={async (e) => {
+      e.preventDefault();
+      const saved = await onSubmit({ type, title, url, imageUrl, note });
+      if (saved && !recommendation) {
+        setTitle('');
+        setUrl('');
+        setImageUrl('');
+        setNote('');
+        setSearchResults([]);
+        setHasSearched(false);
+      }
+    }}>
+      <select value={type} onChange={(e) => { setType(e.target.value); setImageUrl(''); setSearchResults([]); setHasSearched(false); setSearchError(''); }}>
         <option value="MOVIE">Movie</option>
         <option value="SERIES">Series</option>
         <option value="BOOK">Book</option>
         <option value="MUSIC">Music</option>
       </select>
-      <input placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} required />
+      <label>
+        Title
+        <input placeholder="Search by title" value={title} onChange={(e) => { setTitle(e.target.value); setImageUrl(''); setUrl(''); setSearchResults([]); setHasSearched(false); }} required />
+      </label>
+      {type !== 'BOOK' ? (
+        <div className="catalog-search">
+          <button type="button" className="ghost-btn" onClick={() => void searchCatalog()} disabled={busy || searching}>
+            {searching ? 'Searching…' : 'Find artwork'}
+          </button>
+          {searchError ? <p className="catalog-error" role="alert">{searchError}</p> : null}
+          {searchResults.length ? (
+            <div className="catalog-results" aria-label="Artwork search results">
+              {searchResults.map((result) => (
+                <button
+                  key={result.id}
+                  type="button"
+                  className="catalog-result"
+                  onClick={() => {
+                    setTitle(result.title);
+                    setUrl(result.url ?? '');
+                    setImageUrl(result.imageUrl);
+                    setSearchResults([]);
+                  }}
+                >
+                  <img src={result.imageUrl} alt="" />
+                  <span><strong>{result.title}</strong>{result.artist ? <small>{result.artist}</small> : null}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {hasSearched && !searchResults.length && !searchError ? (
+            <p className="meta-line">
+              Apple Search has no artwork listing for this title yet. Try an image URL below, or{' '}
+              <a href={`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(title)}`} target="_blank" rel="noreferrer">search the web for artwork</a>.
+            </p>
+          ) : null}
+          {imageUrl ? <p className="meta-line">Artwork selected from Apple Search.</p> : null}
+        </div>
+      ) : null}
       <input placeholder="Optional link" value={url} onChange={(e) => setUrl(e.target.value)} />
+      <input type="url" placeholder="Optional artwork image URL (HTTPS)" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} />
       <textarea placeholder="Why recommend this?" value={note} onChange={(e) => setNote(e.target.value)} />
-      <button className="primary-btn">Share recommendation</button>
+      <div className="inline-actions">
+        <button className="primary-btn" disabled={busy}>{recommendation ? 'Save changes' : 'Share recommendation'}</button>
+        {recommendation ? <button type="button" className="ghost-btn" disabled={busy} onClick={onCancel}>Cancel edit</button> : null}
+      </div>
     </form>
   );
 }
 
-function RecommendationGrid({ items, currentUser, onLike, onRate }: { items: Recommendation[]; currentUser: User; onLike: (id: string) => void; onRate: (id: string, score: number) => void }) {
+function RecommendationGrid({ items, currentUser, busy, onEdit, onDelete, onLike, onRate }: {
+  items: Recommendation[];
+  currentUser: User;
+  busy: boolean;
+  onEdit: (item: Recommendation) => void;
+  onDelete: (id: string) => void;
+  onLike: (id: string) => void;
+  onRate: (id: string, score: number) => void;
+}) {
   return (
     <div className="grid-cards roomy-grid">
       {items.map((item) => {
@@ -538,6 +612,13 @@ function RecommendationGrid({ items, currentUser, onLike, onRate }: { items: Rec
               <span className="chip bright">{item.type}</span>
               <span className="rating-pill">⭐ {average} / 5{item.ratings.length ? ` • ${item.ratings.length} rating${item.ratings.length > 1 ? 's' : ''}` : ''}</span>
             </div>
+            {item.author.id === currentUser.id ? (
+              <div className="record-actions">
+                <button className="ghost-btn small" disabled={busy} onClick={() => onEdit(item)}>Edit</button>
+                <button className="ghost-btn small" disabled={busy} onClick={() => onDelete(item.id)}>Delete</button>
+              </div>
+            ) : null}
+            {item.imageUrl ? <img className="rec-artwork" src={item.imageUrl} alt={`Artwork for ${item.title}`} loading="lazy" /> : null}
             <h4>{item.title}</h4>
             <p className="meta-line">Shared by {item.author.name}</p>
             {item.note ? <p>{item.note}</p> : null}
@@ -569,119 +650,19 @@ function RecommendationGrid({ items, currentUser, onLike, onRate }: { items: Rec
 function KudosForm({ users, currentUser, onSubmit }: { users: User[]; currentUser: User; onSubmit: (payload: { toId: string; message: string }) => void }) {
   const [toId, setToId] = useState('');
   const [message, setMessage] = useState('');
+  const teammates = users.filter((u) => u.id !== currentUser.id);
   return (
     <form className="form-stack" onSubmit={(e) => { e.preventDefault(); onSubmit({ toId, message }); setMessage(''); }}>
+      <p className="section-subtitle">
+        {teammates.length ? 'Reload the portal after new teammates are added to refresh this list.' : 'Teammates will appear here as they join the portal. Reload the portal to refresh this list.'}
+      </p>
       <select value={toId} onChange={(e) => setToId(e.target.value)} required>
         <option value="">Choose a teammate</option>
-        {users.filter((u) => u.id !== currentUser.id).map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+        {teammates.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
       </select>
       <textarea placeholder="Say something nice" value={message} onChange={(e) => setMessage(e.target.value)} required />
       <button className="primary-btn">Send kudos</button>
     </form>
-  );
-}
-
-function PollForm({ onSubmit }: { onSubmit: (payload: { question: string; options: string[]; closesAt: string }) => void }) {
-  const [question, setQuestion] = useState('');
-  const [rawOptions, setRawOptions] = useState('Option 1\nOption 2');
-  const [closesAt, setClosesAt] = useState('');
-  return (
-    <form className="form-stack" onSubmit={(e) => { e.preventDefault(); onSubmit({ question, options: rawOptions.split('\n').map((x) => x.trim()).filter(Boolean), closesAt }); setQuestion(''); }}>
-      <input placeholder="Question" value={question} onChange={(e) => setQuestion(e.target.value)} required />
-      <textarea placeholder="One option per line" value={rawOptions} onChange={(e) => setRawOptions(e.target.value)} required />
-      <label>Close date<input type="datetime-local" value={closesAt} onChange={(e) => setClosesAt(e.target.value)} required /></label>
-      <button className="primary-btn">Create poll</button>
-    </form>
-  );
-}
-
-function PollPreview({ poll }: { poll: Poll }) {
-  const options = JSON.parse(poll.optionsJson) as string[];
-  return <div className="mini-card"><strong>{poll.question}</strong><p>{options.join(' • ')}</p></div>;
-}
-
-function PollList({ polls, currentUser, onVote }: { polls: Poll[]; currentUser: User; onVote: (id: string, optionIndex: number) => void }) {
-  return (
-    <div className="stack-list">
-      {polls.map((poll) => {
-        const options = JSON.parse(poll.optionsJson) as string[];
-        const total = poll.votes.length || 1;
-        const myVote = poll.votes.find((vote) => vote.userId === currentUser.id)?.optionIndex;
-        const closed = new Date(poll.closesAt) < new Date();
-        return (
-          <article key={poll.id} className="poll-card">
-            <h4>{poll.question}</h4>
-            <p>by {poll.creator.name}</p>
-            {options.map((option, index) => {
-              const count = poll.votes.filter((vote) => vote.optionIndex === index).length;
-              const percentage = Math.round((count / total) * 100);
-              return (
-                <div key={option} className="poll-option">
-                  <button className={myVote === index ? 'primary-btn small' : 'ghost-btn small'} disabled={closed} onClick={() => onVote(poll.id, index)}>{option}</button>
-                  <div className="poll-bar"><span style={{ width: `${percentage}%` }} /></div>
-                  <small>{count} votes • {percentage}%</small>
-                </div>
-              );
-            })}
-          </article>
-        );
-      })}
-      {polls.length === 0 && <p>No polls yet.</p>}
-    </div>
-  );
-}
-
-function WheelForm({ onSubmit }: { onSubmit: (payload: { name: string; options: string[] }) => void }) {
-  const [name, setName] = useState('Friday plan');
-  const [options, setOptions] = useState('Movie\nGame\nMeme review');
-  return (
-    <form className="form-stack" onSubmit={(e) => { e.preventDefault(); onSubmit({ name, options: options.split('\n').map((x) => x.trim()).filter(Boolean) }); }}>
-      <input value={name} onChange={(e) => setName(e.target.value)} />
-      <textarea value={options} onChange={(e) => setOptions(e.target.value)} />
-      <button className="primary-btn">Save preset</button>
-    </form>
-  );
-}
-
-function DecisionWheel({ presets }: { presets: WheelPreset[] }) {
-  const [selectedId, setSelectedId] = useState('');
-  const [rotation, setRotation] = useState(0);
-  const [winner, setWinner] = useState('');
-  const selected = presets.find((preset) => preset.id === selectedId) ?? presets[0];
-  const options = useMemo(() => selected ? JSON.parse(selected.optionsJson) as string[] : ['Coffee', 'Tea'], [selected]);
-  const segmentAngle = 360 / options.length;
-
-  function spin() {
-    const winnerIndex = Math.floor(Math.random() * options.length);
-    const extraTurns = 6 * 360;
-    const stopAngle = 360 - (winnerIndex * segmentAngle + segmentAngle / 2);
-    setRotation((prev) => prev + extraTurns + stopAngle);
-    setWinner(options[winnerIndex]);
-  }
-
-  return (
-    <div className="wheel-layout">
-      <div>
-        <select value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>
-          {presets.map((preset) => <option key={preset.id} value={preset.id}>{preset.name}</option>)}
-        </select>
-        <button className="primary-btn" onClick={spin}>Spin the wheel!</button>
-        {winner ? <p className="winner-banner">Winner: <strong>{winner}</strong> 🥳</p> : <p>Save a preset and spin.</p>}
-      </div>
-      <div className="wheel-stage">
-        <div className="wheel-pointer">▼</div>
-        <div className="wheel" style={{ transform: `rotate(${rotation}deg)` }}>
-          {options.map((option, index) => {
-            const angle = index * segmentAngle;
-            return (
-              <div key={option} className="wheel-segment" style={{ transform: `rotate(${angle}deg) skewY(${90 - segmentAngle}deg)` }}>
-                <span style={{ transform: `skewY(-${90 - segmentAngle}deg) rotate(${segmentAngle / 2}deg)` }}>{option}</span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
   );
 }
 

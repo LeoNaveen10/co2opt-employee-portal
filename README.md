@@ -6,16 +6,17 @@ A fun, colorful internal portal for CO2OPT employees.
 
 - Email + password login with allowlisted `@co2opt.com` users
 - First-time account activation using invite tokens
-- Holiday tracker with manager/admin approvals
+- Leave tracker with immediate recording and balance deductions
 - Team availability calendar
-- Everyone can see everyone else's leave allocation, used days, pending days and remaining balance
-- Leave deduction excludes weekends and configured public holidays
+- Everyone can see everyone else's leave allocation, taken days and remaining balance
+- Leave deduction excludes weekends
 - Half-day leave is **not** supported
 - Movie / series / book recommendations
+- Apple Search artwork lookup for movies, series and music (no API key required); titles not in its catalog can use a direct HTTPS artwork URL
+- Authors can edit or delete their own recommendations
+- Leave records cannot be edited or deleted after they are added
 - Shared music recommendations
 - Kudos and appreciation wall
-- Weekly polls
-- Decision wheel presets
 - Birthdays and work anniversaries
 
 ## Tech
@@ -71,7 +72,9 @@ EMPLOYEE_INVITES='[
 npm run db:push
 ```
 
-### 4) Seed allowlisted users and default public holidays
+Run this again after Prisma schema changes so the database and generated client stay in sync.
+
+### 4) Seed allowlisted users
 
 ```bash
 npm run seed
@@ -99,10 +102,11 @@ npm run dev
 - Annual allocation: `23`
 - Full day only
 - Weekends do not deduct
-- Configured public holidays do not deduct
+- Public holidays are not used in leave calculations
 - Everyone can view everyone else's leave counts
-- Employees cannot approve their own leave
-- Overlapping pending/approved leave requests are blocked
+- Leave is recorded and deducted immediately; there is no approval workflow
+- Leave records are permanent once recorded
+- Overlapping leave records are blocked
 
 ## Branding
 
@@ -114,11 +118,11 @@ apps/web/public/co2opt-logo.jpg
 
 ## Optional demo data (local machine only)
 
-After creating the database, use `ALLOW_DEMO_SEED=yes npm run seed:demo` to populate four **fictional** accounts, recommendations, kudos, a poll and a wheel. The demo password is `DemoOnly!2026` (never use it outside throwaway development). Do not seed demo users against real company data.
+After creating the database, use `ALLOW_DEMO_SEED=yes npm run seed:demo` to populate four **fictional** accounts, recommendations and kudos. The demo password is `DemoOnly!2026` (never use it outside throwaway development). Do not seed demo users against real company data.
 
 ## Important pre-deployment work
 
-This is an MVP prototype, not production-ready. Replace the development in-memory session store with a persistent session store; add CSRF protection, login rate limiting, secure cookies over HTTPS, integration tests, atomic leave approval transactions, employee-specific accrual/adjustments if needed, and a full accessibility review. Set the actual company's public holidays as admin—none are assumed by default. Hosting has intentionally not been decided.
+This is an MVP prototype, not production-ready. Replace the development in-memory session store with a persistent session store; add CSRF protection, login rate limiting, secure cookies over HTTPS, integration tests, atomic leave booking transactions, employee-specific accrual/adjustments if needed, and a full accessibility review. Hosting has intentionally not been decided.
 
 ## Notes
 

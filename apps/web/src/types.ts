@@ -11,34 +11,29 @@ export type User = {
 export type LeaveSummary = {
   userId: string;
   name: string;
-  role: string;
   allocation: number;
-  approved: number;
-  pending: number;
+  taken: number;
   remaining: number;
 };
 
 export type LeaveRequest = {
   id: string;
   employeeId: string;
-  reviewerId?: string | null;
   startDate: string;
   endDate: string;
   days: number;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED' | string;
+  status?: string;
   note?: string | null;
   createdAt: string;
   employee: { id: string; name: string; email: string };
-  reviewer?: { id: string; name: string; email: string } | null;
 };
-
-export type Holiday = { id?: number; date: string; name: string };
 
 export type Recommendation = {
   id: string;
   type: 'MOVIE' | 'SERIES' | 'BOOK' | 'MUSIC' | string;
   title: string;
   url?: string | null;
+  imageUrl?: string | null;
   note?: string | null;
   author: { id: string; name: string };
   likes: { userId: string; recommendationId: string }[];
@@ -46,28 +41,18 @@ export type Recommendation = {
   createdAt: string;
 };
 
+export type RecommendationSearchResult = {
+  id: string;
+  title: string;
+  artist?: string;
+  url?: string;
+  imageUrl: string;
+};
+
 export type Kudos = {
   id: string;
   message: string;
   from: { id: string; name: string };
   to: { id: string; name: string };
-  createdAt: string;
-};
-
-export type Poll = {
-  id: string;
-  question: string;
-  optionsJson: string;
-  closesAt: string;
-  createdAt: string;
-  creator: { id: string; name: string };
-  votes: { pollId: string; userId: string; optionIndex: number }[];
-};
-
-export type WheelPreset = {
-  id: string;
-  name: string;
-  optionsJson: string;
-  creator: { id: string; name: string };
   createdAt: string;
 };

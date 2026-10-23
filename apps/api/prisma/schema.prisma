@@ -26,15 +26,6 @@ model User {
   ratings        Rating[]
   kudosSent      Kudos[]          @relation("Sender")
   kudosReceived  Kudos[]          @relation("Recipient")
-  votes          PollVote[]
-  wheelPresets   WheelPreset[]
-  pollsCreated   Poll[]           @relation("PollCreator")
-}
-
-model PublicHoliday {
-  id    Int    @id @default(autoincrement())
-  date  String @unique
-  name  String
 }
 
 model LeaveRequest {
@@ -46,7 +37,7 @@ model LeaveRequest {
   startDate  String
   endDate    String
   days       Int
-  status     String   @default("PENDING")
+  status     String   @default("APPROVED")
   note       String?
   createdAt  DateTime @default(now())
   reviewedAt DateTime?
@@ -57,6 +48,7 @@ model Recommendation {
   type      String
   title     String
   url       String?
+  imageUrl  String?
   note      String?
   authorId  String
   author    User     @relation(fields: [authorId], references: [id])
@@ -92,34 +84,4 @@ model Kudos {
   from      User     @relation("Sender", fields: [fromId], references: [id])
   to        User     @relation("Recipient", fields: [toId], references: [id])
   createdAt DateTime @default(now())
-}
-
-model Poll {
-  id         String     @id @default(cuid())
-  question   String
-  optionsJson String
-  closesAt   DateTime
-  createdBy  String
-  creator    User       @relation("PollCreator", fields: [createdBy], references: [id])
-  createdAt  DateTime   @default(now())
-  votes      PollVote[]
-}
-
-model PollVote {
-  pollId      String
-  userId      String
-  optionIndex Int
-  poll        Poll @relation(fields: [pollId], references: [id], onDelete: Cascade)
-  user        User @relation(fields: [userId], references: [id])
-
-  @@id([pollId, userId])
-}
-
-model WheelPreset {
-  id          String   @id @default(cuid())
-  name        String
-  optionsJson String
-  createdBy   String
-  creator     User     @relation(fields: [createdBy], references: [id])
-  createdAt   DateTime @default(now())
 }
