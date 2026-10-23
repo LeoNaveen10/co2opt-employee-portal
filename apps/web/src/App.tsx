@@ -247,10 +247,12 @@ function App() {
         <div className="page-grid two-col">
           <section className="card">
             <h3>Add recommendation</h3>
+            <p className="section-subtitle">Share a movie, series, book, or song with the team.</p>
             <RecommendationForm onSubmit={(payload) => runAction(() => api('/recommendations', { method: 'POST', body: JSON.stringify(payload) }), 'Recommendation added!')} />
           </section>
           <section className="card span-2">
             <h3>Movies, series and books 🍿📚</h3>
+            <p className="section-subtitle">Everyone can like and rate these picks from 1 to 5 stars.</p>
             <RecommendationGrid
               items={data.recommendations.filter((item) => item.type !== 'MUSIC')}
               currentUser={user}
@@ -260,6 +262,7 @@ function App() {
           </section>
           <section className="card span-2 gradient-c">
             <h3>Shared music corner 🎧</h3>
+            <p className="section-subtitle">Drop songs, albums, or playlists and rate other people's music picks.</p>
             <RecommendationGrid
               items={data.recommendations.filter((item) => item.type === 'MUSIC')}
               currentUser={user}
@@ -269,10 +272,12 @@ function App() {
           </section>
           <section className="card">
             <h3>Create a poll</h3>
+            <p className="section-subtitle">Anyone on the team can create a poll.</p>
             <PollForm onSubmit={(payload) => runAction(() => api('/polls', { method: 'POST', body: JSON.stringify(payload) }), 'Poll created.')} />
           </section>
           <section className="card span-2">
             <h3>Weekly polls</h3>
+            <p className="section-subtitle">Vote once and watch the results update live.</p>
             <PollList polls={data.polls} currentUser={user} onVote={(id, optionIndex) => runAction(() => api(`/polls/${id}/vote`, { method: 'POST', body: JSON.stringify({ optionIndex }) }), 'Vote submitted.')} />
           </section>
           <section className="card">
@@ -290,10 +295,12 @@ function App() {
         <div className="page-grid two-col">
           <section className="card">
             <h3>Send kudos</h3>
+            <p className="section-subtitle">Anyone can send shout-outs to anyone else on the team.</p>
             <KudosForm users={data.users} currentUser={user} onSubmit={(payload) => runAction(() => api('/kudos', { method: 'POST', body: JSON.stringify(payload) }), 'Kudos delivered!')} />
           </section>
           <section className="card span-2">
             <h3>Kudos wall 💌</h3>
+            <p className="section-subtitle">Public appreciation, team love, and small wins all belong here.</p>
             <div className="grid-cards">
               {data.kudos.map((item) => (
                 <article key={item.id} className="kudos-card">
@@ -350,7 +357,7 @@ function AuthScreen({ onSubmit, busy, message }: { onSubmit: (endpoint: '/auth/l
       <div className="auth-card">
         <img src="/co2opt-logo.jpg" alt="CO2OPT logo" className="auth-logo" />
         <h1>CO2OPT Employee Portal</h1>
-        <p>Bright. Chaotic. Very internal. Slightly unprofessional. Very fun.</p>
+        <p className="auth-tagline">Bright. Chaotic. Very internal. Slightly unprofessional. Very fun.</p>
         <div className="switch-row">
           <button className={mode === 'login' ? 'nav-btn active' : 'nav-btn'} onClick={() => setMode('login')}>Login</button>
           <button className={mode === 'activate' ? 'nav-btn active' : 'nav-btn'} onClick={() => setMode('activate')}>Activate account</button>
@@ -520,27 +527,36 @@ function RecommendationForm({ onSubmit }: { onSubmit: (payload: { type: string; 
 
 function RecommendationGrid({ items, currentUser, onLike, onRate }: { items: Recommendation[]; currentUser: User; onLike: (id: string) => void; onRate: (id: string, score: number) => void }) {
   return (
-    <div className="grid-cards">
+    <div className="grid-cards roomy-grid">
       {items.map((item) => {
         const myRating = item.ratings.find((rating) => rating.userId === currentUser.id)?.score ?? 0;
         const average = item.ratings.length ? (item.ratings.reduce((sum, entry) => sum + entry.score, 0) / item.ratings.length).toFixed(1) : '—';
         const liked = item.likes.some((like) => like.userId === currentUser.id);
         return (
           <article key={item.id} className="rec-card">
-            <span className="chip bright">{item.type}</span>
+            <div className="card-top-row">
+              <span className="chip bright">{item.type}</span>
+              <span className="rating-pill">⭐ {average} / 5{item.ratings.length ? ` • ${item.ratings.length} rating${item.ratings.length > 1 ? 's' : ''}` : ''}</span>
+            </div>
             <h4>{item.title}</h4>
-            <p>by {item.author.name}</p>
+            <p className="meta-line">Shared by {item.author.name}</p>
             {item.note ? <p>{item.note}</p> : null}
             {item.url ? <a href={item.url} target="_blank" rel="noreferrer">Open link ↗</a> : null}
-            <div className="inline-actions wrap">
+            <div className="inline-actions wrap reaction-row">
               <button className={liked ? 'primary-btn small' : 'ghost-btn small'} onClick={() => onLike(item.id)}>{liked ? 'Liked 💚' : 'Like'}</button>
               <span>{item.likes.length} likes</span>
-              <span>Avg rating: {average}</span>
+              <span>Your rating: <strong>{myRating || '—'}</strong></span>
             </div>
-            <div className="rating-row">
-              {[1, 2, 3, 4, 5].map((score) => (
-                <button key={score} className={myRating >= score ? 'star active' : 'star'} onClick={() => onRate(item.id, score)}>★</button>
-              ))}
+            <div className="rate-box">
+              <div className="rate-box-header">
+                <strong>Rate this pick</strong>
+                <span>Tap a star to rate</span>
+              </div>
+              <div className="rating-row roomy-rating-row">
+                {[1, 2, 3, 4, 5].map((score) => (
+                  <button key={score} className={myRating >= score ? 'star active' : 'star'} onClick={() => onRate(item.id, score)} aria-label={`Rate ${item.title} ${score} star${score > 1 ? 's' : ''}`}>★</button>
+                ))}
+              </div>
             </div>
           </article>
         );
