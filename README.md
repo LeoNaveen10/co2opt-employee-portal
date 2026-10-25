@@ -5,7 +5,7 @@ A fun, colorful internal portal for CO2OPT employees.
 ## MVP features
 
 - Email + password login with allowlisted `@co2opt.com` users
-- First-time account activation using invite tokens
+- Direct sign-up for allowlisted emails with a name and password; no activation or password reset
 - Leave tracker with immediate recording and balance deductions
 - Team availability calendar
 - Everyone can see everyone else's leave allocation, taken days and remaining balance
@@ -18,12 +18,13 @@ A fun, colorful internal portal for CO2OPT employees.
 - Shared music recommendations
 - Kudos and appreciation wall
 - Birthdays and work anniversaries
+- Downloadable monthly or yearly team leave reports in CSV format
 
 ## Tech
 
 - Frontend: React + TypeScript + Vite
 - Backend: Node.js + Express + TypeScript
-- Database: SQLite + Prisma
+- Database: PostgreSQL + Sequelize
 
 ## Project structure
 
@@ -51,34 +52,33 @@ Copy the example env file:
 cp apps/api/.env.example apps/api/.env
 ```
 
-Update the values, especially:
-
-- `SESSION_SECRET`
-- `EMPLOYEE_INVITES`
-
-Example:
+Set `EMPLOYEE_EMAILS` to a JSON array. Only listed addresses from `co2opt.com` can sign up or log in. An empty list allows nobody. Invalid configuration stops the API at startup.
 
 ```env
-EMPLOYEE_INVITES='[
-  {"email":"admin@co2opt.com","name":"Admin","role":"ADMIN","inviteToken":"some-long-random-token-123456789"},
-  {"email":"manager@co2opt.com","name":"Manager","role":"MANAGER","inviteToken":"another-long-random-token-123456789"},
-  {"email":"employee@co2opt.com","name":"Employee","role":"EMPLOYEE","inviteToken":"third-long-random-token-123456789"}
-]'
+EMPLOYEE_EMAILS='["alice@co2opt.com","bob@co2opt.com"]'
 ```
 
-### 3) Create the database schema
+Employees enter their own job role at sign-up. Roles are display-only; all employees have the same access. No users or demo data are seeded. No session secret configuration is needed: the API generates one at startup. Restarting the API signs everyone out. Restart after editing the allowlist.
+
+### 3) Configure PostgreSQL
+
+Create a local PostgreSQL database named `employee-info`, then set `DATABASE_URL`
+in `apps/api/.env`:
+
+```env
+DATABASE_URL="postgres://postgres:YOUR_POSTGRES_PASSWORD@localhost:5432/employee-info"
+```
+
+The API uses Sequelize models for all persistence. Schema synchronization creates
+missing tables in PostgreSQL; it does not migrate existing SQLite data.
+
+### 4) Create the database schema
 
 ```bash
-npm run db:push
+npm run db:sync
 ```
 
-Run this again after Prisma schema changes so the database and generated client stay in sync.
-
-### 4) Seed allowlisted users
-
-```bash
-npm run seed
-```
+Run this again after Sequelize model changes to create any missing tables.
 
 ### 5) Start the frontend and backend together
 
@@ -89,13 +89,9 @@ npm run dev
 - Frontend: `http://localhost:5173`
 - Backend: `http://localhost:4000`
 
-## Activation flow
+## Sign-up and login
 
-1. Seed users using `EMPLOYEE_INVITES`
-2. Give each employee their invite token privately
-3. Employee opens the app and chooses **Activate account**
-4. Employee enters email, password, invite token, optional birthday and joined date
-5. After activation, they can log in normally
+First-time employees choose **Sign up**, enter their allowlisted email, name, job role and a password of at least 8 characters, plus optional birthday and joined date. Their account is created at that point and they are signed in immediately. Returning employees log in with their email and password. There are no invite tokens, activation steps or password reset flows. Existing passwords continue to work for allowlisted accounts.
 
 ## Leave rules implemented
 
@@ -115,10 +111,6 @@ The uploaded CO2OPT logo is included at:
 ```text
 apps/web/public/co2opt-logo.jpg
 ```
-
-## Optional demo data (local machine only)
-
-After creating the database, use `ALLOW_DEMO_SEED=yes npm run seed:demo` to populate four **fictional** accounts, recommendations and kudos. The demo password is `DemoOnly!2026` (never use it outside throwaway development). Do not seed demo users against real company data.
 
 ## Important pre-deployment work
 

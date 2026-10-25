@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
-import { api } from './api';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { api, apiDownload, AUTH_EXPIRED_EVENT } from './api';
+import { daysUntilCelebration } from './celebrations';
 import type { Kudos, LeaveRequest, LeaveSummary, Recommendation, RecommendationSearchResult, User } from './types';
 
 type DashboardData = {
@@ -31,7 +32,24 @@ function App() {
   const [message, setMessage] = useState<string>('');
   const [activeTab, setActiveTab] = useState<TabKey>('home');
   const [data, setData] = useState<DashboardData>(initialData);
+  const [recommendationOpen, setRecommendationOpen] = useState(false);
   const [editingRecommendation, setEditingRecommendation] = useState<Recommendation | null>(null);
+  const [reportPeriod, setReportPeriod] = useState<'month' | 'year'>('month');
+  const [reportYear, setReportYear] = useState(new Date().getFullYear());
+  const [reportMonth, setReportMonth] = useState(new Date().getMonth() + 1);
+
+  useEffect(() => {
+    const handleExpiredSession = () => {
+      setUser(null);
+      setData(initialData);
+      setEditingRecommendation(null);
+      setRecommendationOpen(false);
+      setActiveTab('home');
+      setMessage('Your session has expired. Please sign in again.');
+    };
+    window.addEventListener(AUTH_EXPIRED_EVENT, handleExpiredSession);
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, handleExpiredSession);
+  }, []);
 
   async function bootstrap() {
     setLoading(true);
@@ -73,7 +91,7 @@ function App() {
     void bootstrap();
   }, []);
 
-  async function handleAuth(endpoint: '/auth/login' | '/auth/activate', payload: Record<string, unknown>) {
+  async function handleAuth(endpoint: '/auth/login' | '/auth/signup', payload: Record<string, unknown>) {
     setBusy(true);
     setMessage('');
     try {
@@ -119,13 +137,39 @@ function App() {
     if (deleted && editingRecommendation?.id === id) setEditingRecommendation(null);
   }
 
+  async function downloadLeaveReport() {
+    setBusy(true);
+    setMessage('');
+    try {
+      const params = new URLSearchParams({ period: reportPeriod, year: String(reportYear) });
+      if (reportPeriod === 'month') params.set('month', String(reportMonth));
+      const { blob, filename } = await apiDownload(`/leave/report?${params}`);
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(link.href);
+      setMessage('Leave report downloaded.');
+    } catch (error) {
+      setMessage((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (loading) return <div className="splash">Loading the fun zone...</div>;
   if (!user) return <AuthScreen onSubmit={handleAuth} busy={busy} message={message} />;
 
   const myLeave = data.leaveSummary.find((item) => item.userId === user.id);
   const leaveTaken = myLeave?.taken ?? getTakenDays(user.id, data.leaveRequests);
   const leaveRemaining = Math.max((myLeave?.allocation ?? 23) - leaveTaken, 0);
-  const upcomingBirthdays = data.celebrations.birthdays.slice(0, 3);
+  const upcoming = (people: User[], field: 'birthday' | 'joinedOn') => people
+    .map((person) => ({ person, days: daysUntilCelebration(person[field], field === 'joinedOn') }))
+    .filter((entry) => entry.days !== null && entry.days <= 15)
+    .sort((a, b) => a.days! - b.days!)
+    .map((entry) => entry.person);
+  const upcomingBirthdays = upcoming(data.celebrations.birthdays, 'birthday');
+  const upcomingAnniversaries = upcoming(data.celebrations.anniversaries, 'joinedOn');
 
   return (
     <div className="app-shell">
@@ -138,10 +182,10 @@ function App() {
           </div>
         </div>
         <div className="topbar-actions">
-          <div className="user-pill">
+          <button type="button" className="user-pill profile-button" onClick={() => setActiveTab('me')} aria-label="Open my profile">
             <span>{user.name}</span>
             <strong>{user.role}</strong>
-          </div>
+          </button>
           <button className="ghost-btn" onClick={logout}>Log out</button>
         </div>
       </header>
@@ -151,8 +195,7 @@ function App() {
           ['home', 'Home'],
           ['holidays', 'Holidays'],
           ['discover', 'Discover'],
-          ['team', 'Team'],
-          ['me', 'Me']
+          ['team', 'Team']
         ].map(([key, label]) => (
           <button
             key={key}
@@ -176,7 +219,7 @@ function App() {
             <div className="hero-stats">
               <StatBubble label="Leave taken" value={String(leaveTaken)} />
               <StatBubble label="Leave remaining" value={String(leaveRemaining)} />
-              <StatBubble label="Recommendations" value={String(data.recommendations.length)} />
+              <StatBubble label="Recommendations" value={String(data.recommendations.length)} onClick={() => setActiveTab('discover')} />
             </div>
           </section>
           <section className="card">
@@ -199,10 +242,11 @@ function App() {
             <h3>Birthdays & anniversaries 🎂</h3>
             {upcomingBirthdays.length ? upcomingBirthdays.map((person) => (
               <div key={person.id} className="mini-card"><strong>{person.name}</strong> — Birthday: {person.birthday}</div>
-            )) : <p>Add birthdays from the Me tab.</p>}
-            {data.celebrations.anniversaries.slice(0, 3).map((person) => (
+            )) : null}
+            {upcomingAnniversaries.map((person) => (
               <div key={`${person.id}-anniv`} className="mini-card"><strong>{person.name}</strong> — Joined: {person.joinedOn}</div>
             ))}
+            {!upcomingBirthdays.length && !upcomingAnniversaries.length ? <p>No birthdays or anniversaries in the next 15 days.</p> : null}
           </section>
         </div>
       )}
@@ -212,6 +256,36 @@ function App() {
           <section className="card">
             <h3>Everyone's leave counts</h3>
             <LeaveSummaryTable summary={data.leaveSummary} requests={data.leaveRequests} />
+          </section>
+          <section className="card">
+            <h3>Download leave report</h3>
+            <p className="section-subtitle">Export everyone's leave taken and annual remaining balance as a CSV file.</p>
+            <div className="form-stack">
+              <label>
+                Report period
+                <select value={reportPeriod} onChange={(event) => setReportPeriod(event.target.value as 'month' | 'year')}>
+                  <option value="month">Month</option>
+                  <option value="year">Year</option>
+                </select>
+              </label>
+              {reportPeriod === 'month' ? (
+                <label>
+                  Month
+                  <select value={reportMonth} onChange={(event) => setReportMonth(Number(event.target.value))}>
+                    {Array.from({ length: 12 }, (_, index) => (
+                      <option key={index + 1} value={index + 1}>
+                        {new Date(2000, index, 1).toLocaleString(undefined, { month: 'long' })}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+              <label>
+                Year
+                <input type="number" min="2000" max="2100" value={reportYear} onChange={(event) => setReportYear(Number(event.target.value))} />
+              </label>
+              <button className="primary-btn" onClick={() => void downloadLeaveReport()} disabled={busy}>Download CSV</button>
+            </div>
           </section>
           <section className="card">
             <h3>Record leave</h3>
@@ -232,14 +306,18 @@ function App() {
 
       {activeTab === 'discover' && (
         <div className="page-grid two-col">
-          <section className="card">
-            <h3>{editingRecommendation ? 'Edit recommendation' : 'Add recommendation'}</h3>
+          <div className="recommendation-page-actions span-2">
+            <button type="button" className="primary-btn" onClick={() => { setEditingRecommendation(null); setMessage(''); setRecommendationOpen(true); }}><span className="plus-icon" aria-hidden="true" /> Add recommendation</button>
+          </div>
+          {recommendationOpen ? <RecommendationDialog busy={busy} onClose={() => { setRecommendationOpen(false); setEditingRecommendation(null); }}>
+            <h3 id="recommendation-dialog-title">{editingRecommendation ? 'Edit recommendation' : 'Add recommendation'}</h3>
             <p className="section-subtitle">Share a movie, series, book, or song with the team.</p>
+            {message ? <p className="message-banner" role="status">{message}</p> : null}
             <RecommendationForm
               key={editingRecommendation?.id ?? 'new-recommendation'}
               recommendation={editingRecommendation}
               busy={busy}
-              onCancel={() => setEditingRecommendation(null)}
+              onCancel={() => { setRecommendationOpen(false); setEditingRecommendation(null); }}
               onSubmit={async (payload) => {
                 const recommendationId = editingRecommendation?.id;
                 const saved = await runAction(
@@ -249,11 +327,11 @@ function App() {
                   }),
                   recommendationId ? 'Recommendation updated.' : 'Recommendation added!'
                 );
-                if (saved) setEditingRecommendation(null);
+                if (saved) { setEditingRecommendation(null); setRecommendationOpen(false); }
                 return saved;
               }}
             />
-          </section>
+          </RecommendationDialog> : null}
           <section className="card span-2">
             <h3>Movies, series and books 🍿📚</h3>
             <p className="section-subtitle">Everyone can like and rate these picks from 1 to 5 stars.</p>
@@ -261,7 +339,7 @@ function App() {
               items={data.recommendations.filter((item) => item.type !== 'MUSIC')}
               currentUser={user}
               busy={busy}
-              onEdit={setEditingRecommendation}
+              onEdit={(item) => { setEditingRecommendation(item); setMessage(''); setRecommendationOpen(true); }}
               onDelete={(id) => void deleteRecommendation(id)}
               onLike={(id) => runAction(() => api(`/recommendations/${id}/like`, { method: 'POST' }), 'Reaction updated.')}
               onRate={(id, score) => runAction(() => api(`/recommendations/${id}/rate`, { method: 'POST', body: JSON.stringify({ score }) }), 'Rating saved.')}
@@ -274,7 +352,7 @@ function App() {
               items={data.recommendations.filter((item) => item.type === 'MUSIC')}
               currentUser={user}
               busy={busy}
-              onEdit={setEditingRecommendation}
+              onEdit={(item) => { setEditingRecommendation(item); setMessage(''); setRecommendationOpen(true); }}
               onDelete={(id) => void deleteRecommendation(id)}
               onLike={(id) => runAction(() => api(`/recommendations/${id}/like`, { method: 'POST' }), 'Reaction updated.')}
               onRate={(id, score) => runAction(() => api(`/recommendations/${id}/rate`, { method: 'POST', body: JSON.stringify({ score }) }), 'Rating saved.')}
@@ -321,29 +399,52 @@ function App() {
             <h3>Personal details</h3>
             <ProfileForm user={user} onSubmit={(payload) => runAction(() => api('/users/me', { method: 'PATCH', body: JSON.stringify(payload) }), 'Profile updated.')} />
           </section>
-          <section className="card gradient-b">
-            <h3>Your portal vibe</h3>
-            <ul className="feature-list">
-              <li>Leave is recorded immediately without an approval step.</li>
-              <li>You can see everyone's leave allocation, taken days and remaining balance.</li>
-              <li>Leave counts skip weekends.</li>
-              <li>Half-day support is intentionally disabled.</li>
-              <li>Music and kudos keep the place alive.</li>
-            </ul>
-          </section>
         </div>
       )}
     </div>
   );
 }
 
-function AuthScreen({ onSubmit, busy, message }: { onSubmit: (endpoint: '/auth/login' | '/auth/activate', payload: Record<string, unknown>) => Promise<void>; busy: boolean; message: string }) {
-  const [mode, setMode] = useState<'login' | 'activate'>('login');
+function RecommendationDialog({ children, busy, onClose }: { children: ReactNode; busy: boolean; onClose: () => void }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    dialog.current?.showModal();
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, []);
+  return <dialog ref={dialog} className="recommendation-dialog" aria-labelledby="recommendation-dialog-title" onCancel={(event) => { event.preventDefault(); if (!busy) onClose(); }}>
+    <button type="button" className="dialog-close" aria-label="Close recommendation form" disabled={busy} onClick={onClose}><span className="close-icon" aria-hidden="true" /></button>
+    {children}
+  </dialog>;
+}
+
+function AuthScreen({ onSubmit, busy, message }: { onSubmit: (endpoint: '/auth/login' | '/auth/signup', payload: Record<string, unknown>) => Promise<void>; busy: boolean; message: string }) {
+  const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [inviteToken, setInviteToken] = useState('');
+  const [name, setName] = useState('');
+  const [role, setRole] = useState('');
   const [birthday, setBirthday] = useState('');
   const [joinedOn, setJoinedOn] = useState('');
+  const normalizedEmail = email.trim().toLowerCase();
+  const [emailCheck, setEmailCheck] = useState<{ email: string; allowed?: boolean; error?: string } | null>(null);
+  const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
+  const currentCheck = emailCheck?.email === normalizedEmail ? emailCheck : null;
+  const allowed = currentCheck?.allowed === true;
+  const emailFeedback = !normalizedEmail ? '' : !validEmail ? 'Enter a valid email' : currentCheck?.error || (currentCheck?.allowed === false ? 'Email not whitelisted' : !allowed ? 'Checking email?' : '');
+  const canSubmit = allowed && password.length >= 8 && (mode === 'login' || (name.trim().length > 0 && role.trim().length > 0)) && !busy;
+
+  useEffect(() => {
+    if (!validEmail) return;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void api<{ allowed: boolean }>('/auth/check-email', { method: 'POST', body: JSON.stringify({ email: normalizedEmail }) })
+        .then((result) => { if (!cancelled) setEmailCheck({ email: normalizedEmail, allowed: result.allowed }); })
+        .catch(() => { if (!cancelled) setEmailCheck({ email: normalizedEmail, error: 'Unable to check email. Try again.' }); });
+    }, 300);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [normalizedEmail, validEmail]);
 
   return (
     <div className="auth-wrap">
@@ -353,26 +454,32 @@ function AuthScreen({ onSubmit, busy, message }: { onSubmit: (endpoint: '/auth/l
         <p className="auth-tagline">Bright. Chaotic. Very internal. Slightly unprofessional. Very fun.</p>
         <div className="switch-row">
           <button className={mode === 'login' ? 'nav-btn active' : 'nav-btn'} onClick={() => setMode('login')}>Login</button>
-          <button className={mode === 'activate' ? 'nav-btn active' : 'nav-btn'} onClick={() => setMode('activate')}>Activate account</button>
+          <button className={mode === 'signup' ? 'nav-btn active' : 'nav-btn'} onClick={() => setMode('signup')}>Sign up</button>
         </div>
         <form className="form-stack" onSubmit={(event) => {
           event.preventDefault();
+          if (!canSubmit) return;
           if (mode === 'login') {
-            void onSubmit('/auth/login', { email, password });
+            void onSubmit('/auth/login', { email: normalizedEmail, password });
           } else {
-            void onSubmit('/auth/activate', { email, password, inviteToken, birthday: birthday || null, joinedOn: joinedOn || null });
+            void onSubmit('/auth/signup', { email: normalizedEmail, password, name, role, birthday: birthday || null, joinedOn: joinedOn || null });
           }
         }}>
-          <input placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <input placeholder="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-          {mode === 'activate' ? (
+          <label className="auth-email-field" htmlFor="auth-email">
+            <span className="auth-email-label">Email <span id="auth-email-feedback" className="auth-email-feedback" role="status">{emailFeedback}</span></span>
+            <input id="auth-email" type="email" required autoComplete="email" placeholder="you@co2opt.com" value={email} aria-describedby="auth-email-feedback" aria-invalid={currentCheck?.allowed === false || (!!normalizedEmail && !validEmail)} onChange={(e) => { setEmail(e.target.value); setEmailCheck(null); }} />
+          </label>
+          <input required minLength={8} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} placeholder="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          {mode === 'signup' ? (
             <>
-              <input placeholder="Invite token" value={inviteToken} onChange={(e) => setInviteToken(e.target.value)} />
-              <label>Birthday<input type="date" value={birthday} onChange={(e) => setBirthday(e.target.value)} /></label>
-              <label>Joined company<input type="date" value={joinedOn} onChange={(e) => setJoinedOn(e.target.value)} /></label>
+              <div className="auth-date-fields"><input aria-label="Full name" placeholder="Full name" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} required /><input aria-label="Job role" placeholder="Your role / job title" value={role} onChange={(e) => setRole(e.target.value)} maxLength={100} required /></div>
+              <div className="auth-date-fields">
+                <label>Birthday<input type="date" value={birthday} onChange={(e) => setBirthday(e.target.value)} /></label>
+                <label>Joined company<input type="date" value={joinedOn} onChange={(e) => setJoinedOn(e.target.value)} /></label>
+              </div>
             </>
           ) : null}
-          <button className="primary-btn" disabled={busy}>{busy ? 'Working...' : mode === 'login' ? 'Login' : 'Activate'}</button>
+          <button className="primary-btn" disabled={!canSubmit}>{busy ? 'Working...' : mode === 'login' ? 'Login' : 'Sign up'}</button>
         </form>
         {message ? <div className="message-banner">{message}</div> : null}
       </div>
@@ -380,7 +487,8 @@ function AuthScreen({ onSubmit, busy, message }: { onSubmit: (endpoint: '/auth/l
   );
 }
 
-function StatBubble({ label, value }: { label: string; value: string }) {
+function StatBubble({ label, value, onClick }: { label: string; value: string; onClick?: () => void }) {
+  if (onClick) return <button type="button" className="stat-bubble stat-link" onClick={onClick}><strong>{value}</strong><span>{label}</span></button>;
   return <div className="stat-bubble"><strong>{value}</strong><span>{label}</span></div>;
 }
 
@@ -445,9 +553,12 @@ function LeaveRequestsList({ requests }: { requests: LeaveRequest[] }) {
 }
 
 function AvailabilityCalendar({ leaves }: { leaves: LeaveRequest[] }) {
-  const month = new Date();
-  const year = month.getFullYear();
-  const monthIndex = month.getMonth();
+  const [visibleMonth, setVisibleMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+  const year = visibleMonth.getFullYear();
+  const monthIndex = visibleMonth.getMonth();
   const firstDay = new Date(year, monthIndex, 1);
   const lastDay = new Date(year, monthIndex + 1, 0);
   const days: Date[] = [];
@@ -460,7 +571,11 @@ function AvailabilityCalendar({ leaves }: { leaves: LeaveRequest[] }) {
 
   return (
     <div>
-      <p className="section-subtitle">{month.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</p>
+      <div className="calendar-controls">
+        <button className="ghost-btn small" aria-label="Previous month" onClick={() => setVisibleMonth(new Date(year, monthIndex - 1, 1))}>← Previous</button>
+        <h4>{visibleMonth.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</h4>
+        <button className="ghost-btn small" aria-label="Next month" onClick={() => setVisibleMonth(new Date(year, monthIndex + 1, 1))}>Next →</button>
+      </div>
       <div className="calendar-legend">
         <span className="tag away">Leave taken / booked</span>
       </div>
@@ -501,31 +616,41 @@ function RecommendationForm({ recommendation, busy, onSubmit, onCancel }: {
   const [hasSearched, setHasSearched] = useState(false);
   const [searchError, setSearchError] = useState('');
 
-  async function searchCatalog() {
+  useEffect(() => {
     if (title.trim().length < 2) {
-      setSearchError('Enter at least 2 characters to search.');
+      setSearching(false);
       return;
     }
+    if (imageUrl) return;
+    let cancelled = false;
     setSearching(true);
     setSearchError('');
-    setHasSearched(false);
-    try {
-      const response = await api<{ results: RecommendationSearchResult[] }>(
+    const timer = window.setTimeout(() => {
+      void api<{ results: RecommendationSearchResult[] }>(
         `/recommendations/search?type=${encodeURIComponent(type)}&term=${encodeURIComponent(title.trim())}`
-      );
-      setSearchResults(response.results);
-      setHasSearched(true);
-    } catch (error) {
-      setSearchError((error as Error).message);
-    } finally {
-      setSearching(false);
-    }
-  }
+      ).then((response) => {
+        if (cancelled) return;
+        setSearchResults(response.results);
+        setHasSearched(true);
+        setImageUrl(response.results[0]?.imageUrl ?? '');
+        setSearching(false);
+      }).catch((error: Error) => {
+        if (!cancelled) { setSearchError(error.message); setSearching(false); }
+      });
+    }, 500);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [title, type, imageUrl]);
 
   return (
     <form className="form-stack" onSubmit={async (e) => {
       e.preventDefault();
-      const saved = await onSubmit({ type, title, url, imageUrl, note });
+      const saved = await onSubmit({
+        type,
+        title: title.trim(),
+        url: url.trim(),
+        imageUrl: imageUrl.trim(),
+        note: note.trim()
+      });
       if (saved && !recommendation) {
         setTitle('');
         setUrl('');
@@ -545,11 +670,9 @@ function RecommendationForm({ recommendation, busy, onSubmit, onCancel }: {
         Title
         <input placeholder="Search by title" value={title} onChange={(e) => { setTitle(e.target.value); setImageUrl(''); setUrl(''); setSearchResults([]); setHasSearched(false); }} required />
       </label>
-      {type !== 'BOOK' ? (
+      {(
         <div className="catalog-search">
-          <button type="button" className="ghost-btn" onClick={() => void searchCatalog()} disabled={busy || searching}>
-            {searching ? 'Searching…' : 'Find artwork'}
-          </button>
+          {searching ? <p className="meta-line" role="status">Finding artwork?</p> : null}
           {searchError ? <p className="catalog-error" role="alert">{searchError}</p> : null}
           {searchResults.length ? (
             <div className="catalog-results" aria-label="Artwork search results">
@@ -573,18 +696,16 @@ function RecommendationForm({ recommendation, busy, onSubmit, onCancel }: {
           ) : null}
           {hasSearched && !searchResults.length && !searchError ? (
             <p className="meta-line">
-              Apple Search has no artwork listing for this title yet. Try an image URL below, or{' '}
-              <a href={`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(title)}`} target="_blank" rel="noreferrer">search the web for artwork</a>.
+              No artwork found for this title. You can still share your recommendation.
             </p>
           ) : null}
-          {imageUrl ? <p className="meta-line">Artwork selected from Apple Search.</p> : null}
+          {imageUrl ? <img className="artwork-preview" src={imageUrl} alt={`Artwork for ${title}`} /> : null}
         </div>
-      ) : null}
+      )}
       <input placeholder="Optional link" value={url} onChange={(e) => setUrl(e.target.value)} />
-      <input type="url" placeholder="Optional artwork image URL (HTTPS)" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} />
       <textarea placeholder="Why recommend this?" value={note} onChange={(e) => setNote(e.target.value)} />
       <div className="inline-actions">
-        <button className="primary-btn" disabled={busy}>{recommendation ? 'Save changes' : 'Share recommendation'}</button>
+        <button className="primary-btn" disabled={busy || searching}>{recommendation ? 'Save changes' : 'Share recommendation'}</button>
         {recommendation ? <button type="button" className="ghost-btn" disabled={busy} onClick={onCancel}>Cancel edit</button> : null}
       </div>
     </form>
@@ -600,9 +721,34 @@ function RecommendationGrid({ items, currentUser, busy, onEdit, onDelete, onLike
   onLike: (id: string) => void;
   onRate: (id: string, score: number) => void;
 }) {
+  const [authorFilter, setAuthorFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
+  const authors = Array.from(new Map(items.filter((item) => item.author).map((item) => [item.author.id, item.author])).values())
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const showCategories = items.some((item) => item.type !== 'MUSIC');
+  const filteredItems = items.filter((item) => (authorFilter === 'all' || item.author?.id === authorFilter) && (typeFilter === 'all' || item.type === typeFilter));
   return (
-    <div className="grid-cards roomy-grid">
-      {items.map((item) => {
+    <div>
+      <div className="recommendation-filters">
+        <label>Suggested by
+          <select value={authorFilter} onChange={(event) => setAuthorFilter(event.target.value)}>
+            <option value="all">Everyone</option>
+            {authors.map((author) => <option key={author.id} value={author.id}>{author.name}</option>)}
+          </select>
+        </label>
+        {showCategories ? <label>Category
+          <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
+            <option value="all">All categories</option>
+            <option value="MOVIE">Movies</option>
+            <option value="SERIES">Series</option>
+            <option value="BOOK">Books</option>
+          </select>
+        </label> : null}
+        {authorFilter !== 'all' || typeFilter !== 'all' ? <button type="button" className="ghost-btn small" onClick={() => { setAuthorFilter('all'); setTypeFilter('all'); }}>Clear filters</button> : null}
+      </div>
+      <div className="grid-cards roomy-grid recommendation-grid">
+      {filteredItems.map((record) => {
+        const item = { ...record, ratings: record.ratings ?? [], likes: record.likes ?? [] };
         const myRating = item.ratings.find((rating) => rating.userId === currentUser.id)?.score ?? 0;
         const average = item.ratings.length ? (item.ratings.reduce((sum, entry) => sum + entry.score, 0) / item.ratings.length).toFixed(1) : '—';
         const liked = item.likes.some((like) => like.userId === currentUser.id);
@@ -612,19 +758,21 @@ function RecommendationGrid({ items, currentUser, busy, onEdit, onDelete, onLike
               <span className="chip bright">{item.type}</span>
               <span className="rating-pill">⭐ {average} / 5{item.ratings.length ? ` • ${item.ratings.length} rating${item.ratings.length > 1 ? 's' : ''}` : ''}</span>
             </div>
-            {item.author.id === currentUser.id ? (
+            {item.imageUrl ? <img className="rec-artwork" src={item.imageUrl} alt={`Artwork for ${item.title}`} loading="lazy" /> : null}
+            <div className="recommendation-title-row">
+              <h4>{item.title}</h4>
+            {item.author?.id === currentUser.id ? (
               <div className="record-actions">
-                <button className="ghost-btn small" disabled={busy} onClick={() => onEdit(item)}>Edit</button>
-                <button className="ghost-btn small" disabled={busy} onClick={() => onDelete(item.id)}>Delete</button>
+                <button className="recommendation-edit-btn" disabled={busy} onClick={() => onEdit(item)}>Edit</button>
+                <button className="recommendation-delete-btn" disabled={busy} onClick={() => onDelete(item.id)}>Delete</button>
               </div>
             ) : null}
-            {item.imageUrl ? <img className="rec-artwork" src={item.imageUrl} alt={`Artwork for ${item.title}`} loading="lazy" /> : null}
-            <h4>{item.title}</h4>
-            <p className="meta-line">Shared by {item.author.name}</p>
+            </div>
+            <p className="meta-line">Shared by {item.author?.name ?? 'Former teammate'}</p>
             {item.note ? <p>{item.note}</p> : null}
             {item.url ? <a href={item.url} target="_blank" rel="noreferrer">Open link ↗</a> : null}
             <div className="inline-actions wrap reaction-row">
-              <button className={liked ? 'primary-btn small' : 'ghost-btn small'} onClick={() => onLike(item.id)}>{liked ? 'Liked 💚' : 'Like'}</button>
+              <button type="button" className={liked ? 'recommendation-like-btn is-liked' : 'recommendation-like-btn'} aria-pressed={liked} disabled={busy} onClick={() => onLike(item.id)}>{liked ? 'Liked 💚' : 'Like'}</button>
               <span>{item.likes.length} likes</span>
               <span>Your rating: <strong>{myRating || '—'}</strong></span>
             </div>
@@ -642,7 +790,8 @@ function RecommendationGrid({ items, currentUser, busy, onEdit, onDelete, onLike
           </article>
         );
       })}
-      {items.length === 0 && <p>Nothing here yet. Add the first one.</p>}
+      {filteredItems.length === 0 && <p>{items.length ? 'No recommendations match these filters.' : 'Nothing here yet. Add the first one.'}</p>}
+      </div>
     </div>
   );
 }

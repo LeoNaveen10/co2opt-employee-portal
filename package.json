@@ -7,10 +7,8 @@
   "scripts": {
     "dev": "concurrently -n API,WEB \"npm run dev -w @co2opt/api\" \"npm run dev -w @co2opt/web\"",
     "install:all": "npm install && npm install -w @co2opt/api && npm install -w @co2opt/web",
-    "db:push": "npm run db:push -w @co2opt/api",
-    "seed": "npm run seed -w @co2opt/api",
-    "build": "npm run build -w @co2opt/web",
-    "seed:demo": "npm run seed:demo -w @co2opt/api"
+    "db:sync": "npm run db:sync -w @co2opt/api",
+    "build": "npm run build -w @co2opt/web"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

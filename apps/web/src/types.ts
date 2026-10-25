@@ -2,7 +2,7 @@ export type User = {
   id: string;
   email: string;
   name: string;
-  role: 'EMPLOYEE' | 'MANAGER' | 'ADMIN' | string;
+  role: string;
   birthday: string | null;
   joinedOn: string | null;
   showBirthday: boolean;
