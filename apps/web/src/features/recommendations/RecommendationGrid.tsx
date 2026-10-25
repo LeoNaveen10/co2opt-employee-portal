@@ -33,7 +33,12 @@ export function RecommendationGrid({ items, currentUser, busy, onEdit, onDelete,
             <option value="BOOK">Books</option>
           </select>
         </label> : null}
-        {authorFilter !== 'all' || typeFilter !== 'all' ? <button type="button" className="ghost-btn small" onClick={() => { setAuthorFilter('all'); setTypeFilter('all'); }}>Clear filters</button> : null}
+        {authorFilter !== 'all' || typeFilter !== 'all' ? <button type="button" className="clear-filters-btn" onClick={() => { setAuthorFilter('all'); setTypeFilter('all'); }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M3 10a9 9 0 1 1 2.6 8.4M3 4v6h6" />
+          </svg>
+          Clear filters
+        </button> : null}
       </div>
       <div className="grid-cards roomy-grid recommendation-grid">
       {filteredItems.map((record) => {
