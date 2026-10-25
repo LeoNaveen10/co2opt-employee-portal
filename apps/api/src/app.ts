@@ -1,0 +1,49 @@
+import express from 'express';
+import cors from 'cors';
+import session from 'express-session';
+import cookieParser from 'cookie-parser';
+import { allowedWebOrigins, sessionSecret } from './config';
+import { sequelize } from './models';
+import { errorHandler } from './middleware/error-handler';
+import authRoutes from './features/auth/routes';
+import usersRoutes from './features/users/routes';
+import leaveRoutes from './features/leave/routes';
+import calendarRoutes from './features/calendar/routes';
+import recommendationsRoutes from './features/recommendations/routes';
+import teamRoutes from './features/team/routes';
+
+export const app = express();
+
+app.use(cors({
+  origin(origin, callback) {
+    callback(null, !origin || allowedWebOrigins.has(origin));
+  },
+  credentials: true
+}));
+app.use(express.json());
+app.use(cookieParser());
+app.use(session({
+  secret: sessionSecret,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: false,
+    maxAge: 1000 * 60 * 60 * 24 * 7
+  }
+}));
+
+app.get('/health', async (_req, res) => {
+  await sequelize.authenticate();
+  res.json({ ok: true });
+});
+
+app.use(authRoutes);
+app.use(usersRoutes);
+app.use(leaveRoutes);
+app.use(calendarRoutes);
+app.use(recommendationsRoutes);
+app.use(teamRoutes);
+
+app.use(errorHandler);

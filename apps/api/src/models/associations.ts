@@ -1,0 +1,25 @@
+import { User } from './user';
+import { LeaveRequest } from './leave-request';
+import { Recommendation } from './recommendation';
+import { Like } from './like';
+import { Rating } from './rating';
+import { Kudos } from './kudos';
+
+User.hasMany(LeaveRequest, { as: 'requestedLeaves', foreignKey: 'employeeId' });
+LeaveRequest.belongsTo(User, { as: 'employee', foreignKey: 'employeeId' });
+User.hasMany(LeaveRequest, { as: 'reviewedLeaves', foreignKey: 'reviewerId' });
+LeaveRequest.belongsTo(User, { as: 'reviewer', foreignKey: 'reviewerId' });
+User.hasMany(Recommendation, { foreignKey: 'authorId' });
+Recommendation.belongsTo(User, { as: 'author', foreignKey: 'authorId' });
+User.hasMany(Like, { foreignKey: 'userId' });
+Like.belongsTo(User, { as: 'user', foreignKey: 'userId' });
+Recommendation.hasMany(Like, { as: 'likes', foreignKey: 'recommendationId', onDelete: 'CASCADE' });
+Like.belongsTo(Recommendation, { foreignKey: 'recommendationId' });
+User.hasMany(Rating, { foreignKey: 'userId' });
+Rating.belongsTo(User, { as: 'user', foreignKey: 'userId' });
+Recommendation.hasMany(Rating, { as: 'ratings', foreignKey: 'recommendationId', onDelete: 'CASCADE' });
+Rating.belongsTo(Recommendation, { foreignKey: 'recommendationId' });
+User.hasMany(Kudos, { as: 'kudosSent', foreignKey: 'fromId' });
+Kudos.belongsTo(User, { as: 'from', foreignKey: 'fromId' });
+User.hasMany(Kudos, { as: 'kudosReceived', foreignKey: 'toId' });
+Kudos.belongsTo(User, { as: 'to', foreignKey: 'toId' });
