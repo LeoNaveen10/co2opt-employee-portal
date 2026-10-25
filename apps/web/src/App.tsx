@@ -9,10 +9,10 @@ import { ProfilePage } from './features/profile/ProfilePage';
 
 function App() {
   const portal = usePortal();
-  const { user, loading, busy, message, activeTab, setActiveTab, logout, handleAuth } = portal;
+  const { user, loading, busy, activeTab, setActiveTab, logout, handleAuth } = portal;
 
   if (loading) return <div className="splash">Loading the fun zone...</div>;
-  if (!user) return <AuthScreen onSubmit={handleAuth} busy={busy} message={message} />;
+  if (!user) return <AuthScreen onSubmit={handleAuth} busy={busy} />;
 
   return (
     <div className="app-shell">
@@ -29,7 +29,7 @@ function App() {
             <span>{user.name}</span>
             <strong>{user.role}</strong>
           </button>
-          <button className="ghost-btn" onClick={logout}>Log out</button>
+          <button className="ghost-btn" disabled={busy} onClick={() => void logout()}>Log out</button>
         </div>
       </header>
 
@@ -49,8 +49,6 @@ function App() {
           </button>
         ))}
       </nav>
-
-      {message ? <div className="message-banner">{message}</div> : null}
 
       {activeTab === 'home' && <HomePage {...portal} user={user} />}
 

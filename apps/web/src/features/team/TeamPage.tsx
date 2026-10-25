@@ -4,7 +4,7 @@ import { CelebrationsList } from '../team/CelebrationsList';
 import { DirectoryList } from '../team/DirectoryList';
 import { api } from '../../api';
 
-export function TeamPage({ user, message, data, runAction }: Omit<Pick<PortalState, 'user' | 'message' | 'data' | 'runAction'>, 'user'> & { user: NonNullable<PortalState['user']> }) {
+export function TeamPage({ user, data, runAction }: Omit<Pick<PortalState, 'user' | 'data' | 'runAction'>, 'user'> & { user: NonNullable<PortalState['user']> }) {
   return (
         <div className="page-grid two-col">
           <section className="card">

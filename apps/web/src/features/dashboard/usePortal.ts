@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, apiDownload, AUTH_EXPIRED_EVENT } from '../../api';
+import { useToast } from '../../components/toast/ToastProvider';
 import { daysUntilCelebration } from '../../celebrations';
 import { getTakenDays } from '../leave/getTakenDays';
 import type { Kudos, LeaveRequest, LeaveSummary, Recommendation, User } from '../../types';
@@ -19,7 +20,7 @@ export function usePortal() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string>('');
+  const { notify, dismissToast } = useToast();
   const [activeTab, setActiveTab] = useState<TabKey>('home');
   const [data, setData] = useState<DashboardData>(initialData);
   const [recommendationOpen, setRecommendationOpen] = useState(false);
@@ -35,7 +36,7 @@ export function usePortal() {
       setEditingRecommendation(null);
       setRecommendationOpen(false);
       setActiveTab('home');
-      setMessage('Your session has expired. Please sign in again.');
+      notify('Your session has expired. Please sign in again.', 'error');
     };
     window.addEventListener(AUTH_EXPIRED_EVENT, handleExpiredSession);
     return () => window.removeEventListener(AUTH_EXPIRED_EVENT, handleExpiredSession);
@@ -50,7 +51,7 @@ export function usePortal() {
         await loadDashboard();
       }
     } catch (error) {
-      setMessage((error as Error).message);
+      notify((error as Error).message, 'error');
     } finally {
       setLoading(false);
     }
@@ -83,35 +84,45 @@ export function usePortal() {
 
   async function handleAuth(endpoint: '/auth/login' | '/auth/signup', payload: Record<string, unknown>) {
     setBusy(true);
-    setMessage('');
+    dismissToast();
     try {
       const response = await api<{ user: User }>(endpoint, { method: 'POST', body: JSON.stringify(payload) });
       setUser(response.user);
       await loadDashboard();
+      notify(endpoint === '/auth/signup' ? 'Account created.' : 'Signed in.');
     } catch (error) {
-      setMessage((error as Error).message);
+      notify((error as Error).message, 'error');
     } finally {
       setBusy(false);
     }
   }
 
   async function logout() {
-    await api('/auth/logout', { method: 'POST' });
-    setUser(null);
-    setData(initialData);
-    setActiveTab('home');
+    setBusy(true);
+    dismissToast();
+    try {
+      await api('/auth/logout', { method: 'POST' });
+      setUser(null);
+      setData(initialData);
+      setActiveTab('home');
+      notify('Signed out.');
+    } catch (error) {
+      notify((error as Error).message, 'error');
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function runAction<T>(work: () => Promise<T>, successMessage: string) {
     setBusy(true);
-    setMessage('');
+    dismissToast();
     try {
       await work();
       await loadDashboard();
-      setMessage(successMessage);
+      notify(successMessage);
       return true;
     } catch (error) {
-      setMessage((error as Error).message);
+      notify((error as Error).message, 'error');
       return false;
     } finally {
       setBusy(false);
@@ -129,7 +140,7 @@ export function usePortal() {
 
   async function downloadLeaveReport() {
     setBusy(true);
-    setMessage('');
+    dismissToast();
     try {
       const params = new URLSearchParams({ period: reportPeriod, year: String(reportYear) });
       if (reportPeriod === 'month') params.set('month', String(reportMonth));
@@ -139,9 +150,11 @@ export function usePortal() {
       link.download = filename;
       link.click();
       URL.revokeObjectURL(link.href);
-      setMessage('Leave report downloaded.');
+      notify('Leave report downloaded.');
+      return true;
     } catch (error) {
-      setMessage((error as Error).message);
+      notify((error as Error).message, 'error');
+      return false;
     } finally {
       setBusy(false);
     }
@@ -158,7 +171,7 @@ export function usePortal() {
   const upcomingBirthdays = upcoming(data.celebrations.birthdays, 'birthday');
   const upcomingAnniversaries = upcoming(data.celebrations.anniversaries, 'joinedOn');
 
-  return { user, loading, busy, message, activeTab, setActiveTab, data, recommendationOpen, setRecommendationOpen, editingRecommendation, setEditingRecommendation, setMessage, reportPeriod, setReportPeriod, reportYear, setReportYear, reportMonth, setReportMonth, handleAuth, logout, runAction, deleteRecommendation, downloadLeaveReport, leaveTaken, leaveRemaining, upcomingBirthdays, upcomingAnniversaries };
+  return { user, loading, busy, activeTab, setActiveTab, data, recommendationOpen, setRecommendationOpen, editingRecommendation, setEditingRecommendation, dismissToast, reportPeriod, setReportPeriod, reportYear, setReportYear, reportMonth, setReportMonth, handleAuth, logout, runAction, deleteRecommendation, downloadLeaveReport, leaveTaken, leaveRemaining, upcomingBirthdays, upcomingAnniversaries };
 }
 
 export type PortalState = ReturnType<typeof usePortal>;

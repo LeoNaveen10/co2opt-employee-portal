@@ -26,17 +26,21 @@ export function AvailabilityCalendar({ leaves }: { leaves: LeaveRequest[] }) {
         <button className="ghost-btn small" aria-label="Next month" onClick={() => setVisibleMonth(new Date(year, monthIndex + 1, 1))}>Next →</button>
       </div>
       <div className="calendar-legend">
-        <span className="tag away">Leave taken / booked</span>
+        <span className="tag away">Leave taken</span>
+        <span className="tag weekend">Weekend</span>
       </div>
       <div className="calendar-grid">
-        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => <div key={day} className="calendar-head">{day}</div>)}
+        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, index) => (
+          <div key={day} className={`calendar-head${index === 0 || index === 6 ? ' weekend' : ''}`}>{day}</div>
+        ))}
         {Array.from({ length: firstDay.getDay() }).map((_, idx) => <div key={`pad-${idx}`} className="calendar-cell muted" />)}
         {days.map((date) => {
           const iso = localISODate(date);
+          const isWeekend = date.getDay() === 0 || date.getDay() === 6;
           const dayLeaves = leaves.filter((leave) => iso >= leave.startDate && iso <= leave.endDate);
           return (
-            <div key={iso} className="calendar-cell">
-              <div className="calendar-date">{date.getDate()}</div>
+            <div key={iso} className={`calendar-cell${isWeekend ? ' weekend' : ''}`}>
+              <time className="calendar-date" dateTime={iso} aria-label={date.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}>{String(date.getDate()).padStart(2, '0')}</time>
               {dayLeaves.slice(0, 3).map((leave) => (
                 <span key={leave.id} className="tag away">{leave.employee.name}</span>
               ))}

@@ -66,12 +66,6 @@ label { display: grid; gap: 0.35rem; font-weight: 600; }
 .primary-btn:hover { transform: translateY(-1px); }
 .ghost-btn { background: white; padding: 0.85rem 1.2rem; }
 .small { padding: 0.5rem 0.9rem; font-size: 0.9rem; }
-.message-banner {
-  background: linear-gradient(90deg, #fef3c7, #fde68a);
-  border-radius: 16px;
-  padding: 0.85rem 1rem;
-  margin-bottom: 1rem;
-}
 .page-grid { display: grid; gap: 1.35rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .page-grid.two-col { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .card { min-width: 0; padding: clamp(1rem, 2.5vw, 1.6rem); overflow-wrap: anywhere; }
@@ -115,9 +109,26 @@ th, td { padding: 0.75rem; text-align: left; border-bottom: 1px dashed rgba(0,0,
 .calendar-controls h4 { margin: 0; text-align: center; }
 .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0.65rem; }
 .calendar-head { font-weight: 700; text-align: center; padding: 0.35rem; }
-.calendar-cell { min-width: 0; min-height: 128px; background: rgba(255,255,255,0.7); border-radius: 18px; padding: 0.7rem; display: flex; flex-direction: column; gap: 0.45rem; }
-.calendar-cell.muted { background: transparent; }
-.calendar-date { font-weight: 800; }
+.calendar-cell { min-width: 0; min-height: 128px; background: #e0e7ff; border: 1px solid #c7d2fe; border-radius: 18px; padding: 0.7rem; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 0.45rem; }
+.calendar-cell.muted { background: transparent; border-color: transparent; }
+.calendar-date {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  min-width: 2ch;
+  height: 1.75rem;
+  flex-shrink: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  font-variant-numeric: lining-nums tabular-nums;
+  letter-spacing: 0;
+  line-height: 1;
+}
+.calendar-head.weekend { color: #166534; }
+.calendar-cell.weekend { background: #bbf7d0; border-color: #86efac; }
+.calendar-cell.weekend .calendar-date { color: #166534; }
+.tag.weekend { background: #dcfce7; color: #166534; font-size: 0.72rem; }
 .inline-form { display: grid; grid-template-columns: 1fr 1fr auto; gap: 0.85rem; margin-top: 1rem; }
 .record-actions { display: flex; gap: 0.5rem; margin: 0.5rem 0; }
 .catalog-search { display: grid; gap: 0.75rem; }
@@ -224,7 +235,6 @@ button:disabled { cursor: not-allowed; opacity: .55; transform: none !important;
 .auth-date-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.65rem; text-align: left; font-size: 0.8rem; }
 .auth-date-fields label { min-width: 0; }
 .auth-date-fields input { min-width: 0; width: 100%; }
-.auth-card .message-banner { margin: 0; padding: 0.5rem; font-size: 0.85rem; }
 @media (max-height: 600px) {
   .auth-wrap { padding: 0.5rem; }
   .auth-card { padding: 0.75rem 1rem; gap: 0.4rem; }
@@ -262,9 +272,9 @@ button:disabled { cursor: not-allowed; opacity: .55; transform: none !important;
 .stat-link { border: 1px solid #ddd6fe; color: inherit; cursor: pointer; }
 .stat-link:hover { outline: 2px solid #a78bfa; }
 .recommendation-page-actions { display: flex; justify-content: flex-end; }
-.recommendation-dialog { width: min(560px, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); padding: 1.5rem; border: 1px solid #ddd6fe; border-radius: 20px; background: #fff; color: #213547; box-shadow: 0 20px 80px #0003; overflow-y: auto; }
-.recommendation-dialog::backdrop { background: #17203380; backdrop-filter: blur(3px); }
-.recommendation-dialog h3 { margin: 0 2rem 1rem 0; }
+.app-dialog { width: min(560px, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); padding: 1.5rem; border: 1px solid #ddd6fe; border-radius: 20px; background: #fff; color: #213547; box-shadow: 0 20px 80px #0003; overflow-y: auto; }
+.app-dialog::backdrop { background: #17203380; backdrop-filter: blur(3px); }
+.app-dialog h3 { margin: 0 2rem 1rem 0; }
 .dialog-close { position: absolute; right: 0.8rem; top: 0.65rem; width: 34px; height: 34px; border: 1px solid #ddd6fe; border-radius: 10px; background: #f5f3ff; font-size: 1.5rem; cursor: pointer; }
 
 .recommendation-page-actions .primary-btn { display: inline-flex; align-items: center; gap: 0.5rem; }
@@ -278,3 +288,5 @@ button:disabled { cursor: not-allowed; opacity: .55; transform: none !important;
 .close-icon::before, .close-icon::after { content: ''; position: absolute; width: 18px; height: 2px; left: -1px; top: 7px; background: currentColor; border-radius: 1px; }
 .close-icon::before { transform: rotate(45deg); }
 .close-icon::after { transform: rotate(-45deg); }
+
+.holidays-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.75rem; }

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '../../api';
 
-export function AuthScreen({ onSubmit, busy, message }: { onSubmit: (endpoint: '/auth/login' | '/auth/signup', payload: Record<string, unknown>) => Promise<void>; busy: boolean; message: string }) {
+export function AuthScreen({ onSubmit, busy }: { onSubmit: (endpoint: '/auth/login' | '/auth/signup', payload: Record<string, unknown>) => Promise<void>; busy: boolean }) {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -63,7 +63,6 @@ export function AuthScreen({ onSubmit, busy, message }: { onSubmit: (endpoint: '
           ) : null}
           <button className="primary-btn" disabled={!canSubmit}>{busy ? 'Working...' : mode === 'login' ? 'Login' : 'Sign up'}</button>
         </form>
-        {message ? <div className="message-banner">{message}</div> : null}
       </div>
     </div>
   );

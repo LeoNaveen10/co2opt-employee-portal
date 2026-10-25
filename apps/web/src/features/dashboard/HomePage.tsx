@@ -2,7 +2,7 @@ import type { PortalState } from '../dashboard/usePortal';
 import { StatBubble } from '../dashboard/StatBubble';
 import { LeaveSummaryTable } from '../leave/LeaveSummaryTable';
 
-export function HomePage({ user, message, setActiveTab, data, leaveTaken, leaveRemaining, upcomingBirthdays, upcomingAnniversaries }: Omit<Pick<PortalState, 'user' | 'message' | 'setActiveTab' | 'data' | 'leaveTaken' | 'leaveRemaining' | 'upcomingBirthdays' | 'upcomingAnniversaries'>, 'user'> & { user: NonNullable<PortalState['user']> }) {
+export function HomePage({ user, setActiveTab, data, leaveTaken, leaveRemaining, upcomingBirthdays, upcomingAnniversaries }: Omit<Pick<PortalState, 'user' | 'setActiveTab' | 'data' | 'leaveTaken' | 'leaveRemaining' | 'upcomingBirthdays' | 'upcomingAnniversaries'>, 'user'> & { user: NonNullable<PortalState['user']> }) {
   return (
         <div className="page-grid">
           <section className="card hero-card gradient-a">
