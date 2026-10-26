@@ -1,4 +1,4 @@
-const API_BASE = `${window.location.protocol}//${window.location.hostname}:4000`;
+import { API_BASE, monitoredFetch } from './monitoring';
 
 export const AUTH_EXPIRED_EVENT = 'portal:auth-expired';
 
@@ -12,7 +12,7 @@ function checkSession(response: Response) {
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}${path}`, {
+    response = await monitoredFetch(path, {
       ...options,
       credentials: 'include',
       headers: {
@@ -38,7 +38,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
 export async function apiDownload(path: string): Promise<{ blob: Blob; filename: string }> {
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}${path}`, { credentials: 'include' });
+    response = await monitoredFetch(path, { credentials: 'include' });
   } catch (error) {
     if (error instanceof TypeError) {
       throw new Error(`Unable to reach the portal API at ${API_BASE}. Make sure the API server is running.`);

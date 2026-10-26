@@ -1,4 +1,5 @@
 import { Op } from 'sequelize';
+import { log as writeLog, errorMetadata } from '../../observability/logger';
 import { sequelize, JiraConnection, TimeEntry, TimeSyncOperation } from '../../models';
 import { jira, JiraError, allWorklogs, worklogSchema, refreshCredentials } from '../jira/client';
 import { toAdf, fromAdf } from './time';
@@ -59,11 +60,13 @@ export async function processOperation(id: string) {
         } else await entry!.update({ confirmed, desired: null, state: 'synced', error: null }, { transaction });
       }
       await operation.update({ status: 'done', error: null }, { transaction });
+      writeLog('info', 'time_sync.operation.completed', { operationId: id, action: operation.action, attempt: operation.attempts });
     } catch (error) {
       const upstream = error instanceof JiraError ? error : null;
       const uncertain = operation.action === 'create' && ambiguousCreate(error);
       const transient = !upstream || upstream.status === 429 || upstream.status >= 500;
       const retry = (uncertain || transient) && operation.attempts < 6;
+      writeLog(retry ? 'warn' : 'error', 'time_sync.operation.failed', { operationId: id, action: operation.action, attempt: operation.attempts, retry, upstreamStatus: upstream?.status, ...errorMetadata(error) });
       const message = upstream?.message || 'Jira did not confirm the request. No new timesheet entry has been saved.';
       await operation.update({ status: retry ? 'pending' : uncertain || upstream?.status === 422 ? 'reconcile' : 'failed', reconcileRequired: uncertain || upstream?.status === 422, error: message, nextAttempt: new Date(Date.now() + retryDelay(operation.attempts, upstream?.retryAfter)) }, { transaction });
       if (entry) await entry.update({ state: retry ? 'pending' : 'failed', error: message }, { transaction });
@@ -89,6 +92,8 @@ export async function workerTick() {
   } finally { running = false; }
 }
 export function startTimeWorker() {
-  const tick = () => void workerTick().catch(() => console.error('Time sync worker could not complete its database cycle.'));
+  writeLog('info', 'time_sync.worker.started');
+  const tick = () => void workerTick().catch(error => writeLog('error', 'time_sync.worker.failed', errorMetadata(error)));
   tick(); const timer = setInterval(tick, 5000); timer.unref();
 }
+

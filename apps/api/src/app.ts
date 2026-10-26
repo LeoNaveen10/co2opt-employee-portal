@@ -14,15 +14,20 @@ import recommendationsRoutes from './features/recommendations/routes';
 import teamRoutes from './features/team/routes';
 import jiraRoutes from './features/jira/routes';
 import timeTrackingRoutes from './features/time-tracking/routes';
+import { requestLogging } from './observability/http';
+import { browserEvents } from './observability/browser-events';
 
 export const app = express();
+app.use(requestLogging);
 
 app.use(cors({
   origin(origin, callback) {
     callback(null, !origin || allowedWebOrigins.has(origin));
   },
-  credentials: true
+  credentials: true,
+  exposedHeaders: ['X-Request-ID']
 }));
+app.use(browserEvents);
 app.use(express.json());
 app.use(cookieParser());
 app.use(session({
