@@ -14,7 +14,7 @@ test('date grouping follows the work date at midnight and Sunday/year boundaries
   assert.equal(new Set(batches).size, 15);
   assert.equal(batches[5], '2026-11-29');
   assert.throws(() => startedAt('2026-02-30', '12:00'));
-  assert.throws(() => startedAt('2099-01-01', '12:00'));
+  assert.equal(startedAt('2099-01-01', '12:00'), '2099-01-01T12:00:00.000+0530');
 });
 test('plain descriptions round trip through Jira rich text', () => {
   assert.equal(fromAdf(toAdf('Worked on search\n\nFixed pagination')), 'Worked on search\n\nFixed pagination');

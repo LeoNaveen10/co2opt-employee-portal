@@ -22,7 +22,6 @@ export function startedAt(date: string, time: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) throw new Error('Invalid work date or start time.');
   const instant = `${date}T${time}:00.000+0530`;
   if (!Number.isFinite(Date.parse(instant)) || localDate(instant) !== date) throw new Error('Invalid work date.');
-  if (date > localDate()) throw new Error('Future work dates are not allowed.');
   return instant;
 }
 export function toAdf(text: string) {
