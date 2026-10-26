@@ -5,21 +5,29 @@ import cookieParser from 'cookie-parser';
 import { allowedWebOrigins, sessionSecret } from './config';
 import { sequelize } from './models';
 import { errorHandler } from './middleware/error-handler';
+import { createHealthRouter } from './features/health/routes';
 import authRoutes from './features/auth/routes';
 import usersRoutes from './features/users/routes';
 import leaveRoutes from './features/leave/routes';
 import calendarRoutes from './features/calendar/routes';
 import recommendationsRoutes from './features/recommendations/routes';
 import teamRoutes from './features/team/routes';
+import jiraRoutes from './features/jira/routes';
+import timeTrackingRoutes from './features/time-tracking/routes';
+import { requestLogging } from './observability/http';
+import { browserEvents } from './observability/browser-events';
 
 export const app = express();
+app.use(requestLogging);
 
 app.use(cors({
   origin(origin, callback) {
     callback(null, !origin || allowedWebOrigins.has(origin));
   },
-  credentials: true
+  credentials: true,
+  exposedHeaders: ['X-Request-ID']
 }));
+app.use(browserEvents);
 app.use(express.json());
 app.use(cookieParser());
 app.use(session({
@@ -34,10 +42,7 @@ app.use(session({
   }
 }));
 
-app.get('/health', async (_req, res) => {
-  await sequelize.authenticate();
-  res.json({ ok: true });
-});
+app.use(createHealthRouter(() => sequelize.authenticate()));
 
 app.use(authRoutes);
 app.use(usersRoutes);
@@ -45,5 +50,7 @@ app.use(leaveRoutes);
 app.use(calendarRoutes);
 app.use(recommendationsRoutes);
 app.use(teamRoutes);
+app.use(jiraRoutes);
+app.use(timeTrackingRoutes);
 
 app.use(errorHandler);

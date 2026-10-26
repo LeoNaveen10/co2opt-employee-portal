@@ -9,5 +9,6 @@ if (!databaseUrl) {
 
 export const sequelize = new Sequelize(databaseUrl, {
   dialect: 'postgres',
+  define: { schema: process.env.DB_SCHEMA || 'public' },
   logging: false
 });

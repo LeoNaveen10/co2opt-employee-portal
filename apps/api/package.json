@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
-    "db:sync": "tsx src/sync-database.ts"
+    "db:sync": "tsx src/sync-database.ts",
+    "db:migrate": "tsx src/database/migrate.ts",
+    "test": "tsx --test src/employee-emails.test.ts src/features/time-tracking/*.test.ts src/observability/*.test.ts"
   },
   "dependencies": {
     "argon2": "^0.41.1",

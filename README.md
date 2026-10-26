@@ -19,6 +19,7 @@ A fun, colorful internal portal for CO2OPT employees.
 - Kudos and appreciation wall
 - Birthdays and work anniversaries
 - Downloadable monthly or yearly team leave reports in CSV format
+- Weekly Jira time tracking with locally stored history, individual entries, and holiday labels
 
 ## Tech
 
@@ -76,9 +77,10 @@ missing tables in PostgreSQL; it does not migrate existing SQLite data.
 
 ```bash
 npm run db:sync
+npm run db:migrate
 ```
 
-Run this again after Sequelize model changes to create any missing tables.
+`db:sync` creates legacy tables. `db:migrate` applies the additive, versioned Jira/time tracking migration. Startup does not synchronize schemas.
 
 ### 5) Start the frontend and backend together
 
@@ -90,6 +92,8 @@ npm run dev
 - Backend: `http://localhost:4000`
 
 ## Sign-up and login
+
+For Jira setup and time tracking behavior, see [Time tracking setup](docs/time-tracking-setup.md).
 
 First-time employees choose **Sign up**, enter their allowlisted email, name, job role and a password of at least 8 characters, plus optional birthday and joined date. Their account is created at that point and they are signed in immediately. Returning employees log in with their email and password. There are no invite tokens, activation steps or password reset flows. Existing passwords continue to work for allowlisted accounts.
 
@@ -119,3 +123,33 @@ This is an MVP prototype, not production-ready. Replace the development in-memor
 ## Notes
 
 This project was generated in a restricted environment. If dependency installation fails in that environment, run the setup locally on your machine where npm registry access is available.
+# Monitoring logs
+
+The API emits newline-delimited JSON to stdout (debug/info/warn) and stderr
+(error/fatal). Configure `LOG_LEVEL` (default `info`) and `APP_RELEASE` in the API
+environment. Have your hosting platform or log collector ingest both streams and
+set access controls and retention there; the application does not rotate local files.
+
+Each HTTP completion records its matched route template, status, duration in ms,
+and `requestId`. Unknown routes use `unmatched` to avoid logging arbitrary URLs.
+The API returns `X-Request-ID`, exposes it through CORS, and accepts UUID v4 IDs
+from the frontend. Error responses also include the ID. Search by `requestId` to
+connect browser failures with server requests. Startup, process failures, and Jira
+worker results use distinct event names. Request bodies, headers, query strings,
+employee data, SQL, and raw error messages/stacks are intentionally excluded.
+
+The frontend reports failed/slow API requests (slow means >= 3 seconds), uncaught
+errors, unhandled rejections, and React render failures to `POST /monitoring/events`.
+It sends only fixed event names, request IDs, status, and duration. It reports at
+most 20 events per minute per page, never retries ingestion, and does not report
+its own ingestion failures. Browser reporting is best effort and may be lost during
+navigation or outages. React failures show a reload screen.
+
+Ingestion accepts at most 8 KB and 300 events/minute per API process. Browser
+events are explicitly tagged `source: untrusted-browser`; they are observations,
+not audit evidence. Use edge rate limiting for public deployments; the process-wide
+cap is not a distributed abuse control. No third-party monitoring account is wired
+up by this change. Configure alerts in your collector for HTTP 5xx rates, request
+duration, `server.start_failed`, `time_sync.worker.failed`, terminal
+`time_sync.operation.failed` (`retry=false`), and `frontend.event` counts.
+

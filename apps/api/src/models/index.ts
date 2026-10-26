@@ -8,3 +8,6 @@ export { Recommendation } from './recommendation';
 export { Like } from './like';
 export { Rating } from './rating';
 export { Kudos } from './kudos';
+export { JiraConnection } from './jira-connection';
+export { TimeEntry } from './time-entry';
+export { TimeSyncOperation } from './time-sync-operation';
