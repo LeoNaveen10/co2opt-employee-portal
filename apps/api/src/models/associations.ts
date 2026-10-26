@@ -4,6 +4,20 @@ import { Recommendation } from './recommendation';
 import { Like } from './like';
 import { Rating } from './rating';
 import { Kudos } from './kudos';
+import { JiraConnection } from './jira-connection';
+import { TimeEntry } from './time-entry';
+import { TimeSyncOperation } from './time-sync-operation';
+
+User.hasMany(JiraConnection, { foreignKey: 'userId' });
+JiraConnection.belongsTo(User, { foreignKey: 'userId' });
+User.hasMany(TimeEntry, { foreignKey: 'userId' });
+TimeEntry.belongsTo(User, { foreignKey: 'userId' });
+JiraConnection.hasMany(TimeEntry, { foreignKey: 'connectionId' });
+TimeEntry.belongsTo(JiraConnection, { foreignKey: 'connectionId' });
+TimeEntry.hasMany(TimeSyncOperation, { foreignKey: 'entryId' });
+TimeSyncOperation.belongsTo(TimeEntry, { foreignKey: 'entryId' });
+JiraConnection.hasMany(TimeSyncOperation, { foreignKey: 'connectionId' });
+TimeSyncOperation.belongsTo(JiraConnection, { foreignKey: 'connectionId' });
 
 User.hasMany(LeaveRequest, { as: 'requestedLeaves', foreignKey: 'employeeId' });
 LeaveRequest.belongsTo(User, { as: 'employee', foreignKey: 'employeeId' });

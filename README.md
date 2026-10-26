@@ -19,6 +19,7 @@ A fun, colorful internal portal for CO2OPT employees.
 - Kudos and appreciation wall
 - Birthdays and work anniversaries
 - Downloadable monthly or yearly team leave reports in CSV format
+- Weekly Jira time tracking with locally stored history, individual entries, and holiday labels
 
 ## Tech
 
@@ -76,9 +77,10 @@ missing tables in PostgreSQL; it does not migrate existing SQLite data.
 
 ```bash
 npm run db:sync
+npm run db:migrate
 ```
 
-Run this again after Sequelize model changes to create any missing tables.
+`db:sync` creates legacy tables. `db:migrate` applies the additive, versioned Jira/time tracking migration. Startup does not synchronize schemas.
 
 ### 5) Start the frontend and backend together
 
@@ -90,6 +92,8 @@ npm run dev
 - Backend: `http://localhost:4000`
 
 ## Sign-up and login
+
+For Jira setup and time tracking behavior, see [Time tracking setup](docs/time-tracking-setup.md).
 
 First-time employees choose **Sign up**, enter their allowlisted email, name, job role and a password of at least 8 characters, plus optional birthday and joined date. Their account is created at that point and they are signed in immediately. Returning employees log in with their email and password. There are no invite tokens, activation steps or password reset flows. Existing passwords continue to work for allowlisted accounts.
 

@@ -10,4 +10,4 @@ export type DashboardData = {
   celebrations: { birthdays: User[]; anniversaries: User[] };
 };
 
-export type TabKey = 'home' | 'holidays' | 'discover' | 'team' | 'me';
+export type TabKey = 'home' | 'time' | 'holidays' | 'discover' | 'team' | 'me';

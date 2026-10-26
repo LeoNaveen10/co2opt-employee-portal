@@ -21,7 +21,7 @@ export function usePortal() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const { notify, dismissToast } = useToast();
-  const [activeTab, setActiveTab] = useState<TabKey>('home');
+  const [activeTab, setActiveTab] = useState<TabKey>(() => new URLSearchParams(window.location.search).get('tab') === 'time' ? 'time' : 'home');
   const [data, setData] = useState<DashboardData>(initialData);
   const [recommendationOpen, setRecommendationOpen] = useState(false);
   const [editingRecommendation, setEditingRecommendation] = useState<Recommendation | null>(null);

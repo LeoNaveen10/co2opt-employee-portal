@@ -6,6 +6,7 @@ import { HolidaysPage } from './features/leave/HolidaysPage';
 import { DiscoverPage } from './features/recommendations/DiscoverPage';
 import { TeamPage } from './features/team/TeamPage';
 import { ProfilePage } from './features/profile/ProfilePage';
+import { TimeTrackingPage } from './features/time-tracking/TimeTrackingPage';
 
 function App() {
   const portal = usePortal();
@@ -36,6 +37,7 @@ function App() {
       <nav className="nav-tabs">
         {[
           ['home', 'Home'],
+          ['time', 'Time tracking'],
           ['holidays', 'Holidays'],
           ['discover', 'Discover'],
           ['team', 'Team']
@@ -51,6 +53,7 @@ function App() {
       </nav>
 
       {activeTab === 'home' && <HomePage {...portal} user={user} />}
+      {activeTab === 'time' && <TimeTrackingPage />}
 
       {activeTab === 'holidays' && <HolidaysPage {...portal} />}
 

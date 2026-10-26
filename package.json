@@ -8,6 +8,7 @@
     "dev": "concurrently -n API,WEB \"npm run dev -w @co2opt/api\" \"npm run dev -w @co2opt/web\"",
     "install:all": "npm install && npm install -w @co2opt/api && npm install -w @co2opt/web",
     "db:sync": "npm run db:sync -w @co2opt/api",
+    "db:migrate": "npm run db:migrate -w @co2opt/api",
     "build": "npm run build -w @co2opt/web"
   },
   "devDependencies": {
